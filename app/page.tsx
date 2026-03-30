@@ -1,7 +1,7 @@
 import React from "react";
-
+import Lobby from "./lobby/page";
 const page = () => {
-  return <div>The Bug Among Us </div>;
+  return <Lobby />;
 };
 
 export default page;
