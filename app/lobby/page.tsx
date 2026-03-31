@@ -8,12 +8,19 @@ const Page = () => {
   const [roomCode, setRoomCode] = useState("");
 
   const [action, setAction] = useState<"create" | "join" | null>(null);
+  const [showNameError, setShowNameError] = useState(false);
 
   const router = useRouter();
 
+  const closePopup = () => {
+    setAction(null);
+    setName("");
+    setShowNameError(false);
+  };
+
   const handleSubmit = () => {
     if (!name) {
-      alert("Enter your name first");
+      setShowNameError(true);
       return;
     }
 
@@ -43,7 +50,7 @@ const Page = () => {
           <span className="drop-shadow-[0_0_10px_rgba(96,165,250,0.8)]">
             The Bug
           </span>
-          <span className="text-blue-300 drop-shadow-[0_0_10px_rgba(147,197,253,0.8)]">
+          <span className="text-[#5CC8FF] drop-shadow-[0_0_10px_rgba(147,197,253,0.8)]">
             Among Us
           </span>
         </h1>
@@ -55,7 +62,7 @@ const Page = () => {
           Create Room
         </button>
 
-        <div className="flex flex-col gap-2 border p-4">
+        <div className="flex flex-col gap-2 border p-4 bg-white/60 clear">
           <p className="text-sm text-gray-700">Or join a room...</p>
 
           <div className="flex gap-2">
@@ -64,7 +71,7 @@ const Page = () => {
               placeholder="Room Code"
               value={roomCode}
               onChange={(e) => setRoomCode(e.target.value)}
-              className="border p-2"
+              className="border p-2 focus:outline-none focus:border-gray-400"
             />
             <button
               onClick={() => {
@@ -79,16 +86,40 @@ const Page = () => {
         </div>
 
         {action && (
-          <div className="fixed inset-0 bg-black/40 flex items-center justify-center">
-            <div className="bg-white p-6 flex flex-col gap-4">
+          <div
+            className="fixed inset-0 bg-black/40 flex items-center justify-center"
+            onClick={closePopup}
+          >
+            <div
+              className="bg-white p-6 flex flex-col gap-4 relative"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                onClick={closePopup}
+                className="absolute top-2 right-3 text-gray-500 hover:text-black text-lg"
+              >
+                <p className="cursor-pointer">✕</p>
+              </button>
+
               <h2 className="text-xl font-bold text-center">Enter your name</h2>
+
+              {showNameError && (
+                <p className="text-red-500 text-sm text-center -mb-2">
+                  Enter your name first
+                </p>
+              )}
 
               <input
                 type="text"
                 placeholder="Your name"
                 value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="border p-2 "
+                onChange={(e) => {
+                  setName(e.target.value);
+                  setShowNameError(false);
+                }}
+                className={`border p-2 focus:outline-none ${
+                  showNameError ? "border-red-500" : "focus:border-gray-400"
+                }`}
               />
 
               <button

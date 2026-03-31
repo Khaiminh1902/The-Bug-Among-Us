@@ -36,7 +36,7 @@ export default function Page() {
     <div className="h-screen flex flex-col items-center justify-center gap-4">
       <h1 className="text-3xl font-bold">Room: {roomId}</h1>
 
-      <h2 className="text-xl font-semibold">Players in lobby</h2>
+      <h2 className="text-xl font-semibold">Players in lobby:</h2>
 
       <div className="flex flex-col gap-2">
         {players.map((player) => (
