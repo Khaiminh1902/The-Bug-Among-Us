@@ -6,6 +6,12 @@ const dev = true;
 const app = next({ dev });
 const handle = app.getRequestHandler();
 
+type Roles = {
+  [roomId: string]: {
+    [socketId: string]: "civilian" | "sabotager";
+  };
+};
+
 type Player = {
   id: string;
   name: string;
@@ -24,6 +30,7 @@ type Votes = {
 
 const votes: Votes = {};
 const rooms: Rooms = {};
+const roles: Roles = {};
 
 app.prepare().then(() => {
   const httpServer = createServer((req, res) => {
@@ -42,6 +49,25 @@ app.prepare().then(() => {
 
       const interval = setInterval(() => {
         io.to(roomId).emit("vote-timer", time);
+
+        const room = rooms[roomId];
+        if (!room) return;
+
+        const playerIds = room.map((p) => p.id);
+
+        const sabotagerCount = Math.max(1, Math.floor(playerIds.length / 4));
+
+        const shuffled = [...playerIds].sort(() => Math.random() - 0.5);
+
+        roles[roomId] = {};
+
+        shuffled.forEach((id, index) => {
+          roles[roomId][id] = index < sabotagerCount ? "sabotager" : "civilian";
+        });
+
+        playerIds.forEach((id) => {
+          io.to(id).emit("your-role", roles[roomId][id]);
+        });
 
         time--;
 

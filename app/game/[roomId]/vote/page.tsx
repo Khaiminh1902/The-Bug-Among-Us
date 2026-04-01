@@ -28,6 +28,7 @@ export default function VotePage() {
   const [winner, setWinner] = useState<string | null>(null);
   const [showWinnerAnimation, setShowWinnerAnimation] = useState(false);
   const [countdown, setCountdown] = useState<number | null>(null);
+  const [role, setRole] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -44,6 +45,7 @@ export default function VotePage() {
     socket.emit("start-vote-timer", roomId);
 
     socket.on("vote-timer", (t: number) => setTime(t));
+
     socket.on("vote-update", (data: Votes) => setVotes(data));
 
     socket.on("vote-winner", (win: string) => {
@@ -54,9 +56,17 @@ export default function VotePage() {
         setLoading(true);
 
         setTimeout(() => {
-          window.location.href = `/game/${roomId}/gameplay`;
-        }, 800);
+          setLoading(true);
+
+          setTimeout(() => {
+            window.location.href = `/game/${roomId}/gameplay`;
+          }, 2500);
+        }, 1000);
       }, 1000);
+    });
+
+    socket.on("your-role", (r: string) => {
+      setRole(r);
     });
 
     return () => {
@@ -84,8 +94,49 @@ export default function VotePage() {
           backgroundPosition: "center",
         }}
       >
-        <div className="h-full w-full bg-black/40 flex items-center justify-center">
-          Loading round...
+        <div className="h-full w-full bg-black/50 flex items-center justify-center">
+          {!role && <span>Loading round...</span>}
+
+          {role && (
+            <div className="text-center max-w-xl font-pixel">
+              <div className="text-4xl mb-6 font-bold">
+                {role === "sabotager" ? (
+                  <span>
+                    YOU ARE THE <span className="text-red-500">SABOTAGER</span>
+                  </span>
+                ) : (
+                  <span>
+                    YOU ARE A <span className="text-green-400">CIVILIAN</span>
+                  </span>
+                )}
+              </div>
+
+              {role === "sabotager" ? (
+                <div className="text-xl text-gray-200 leading-relaxed">
+                  Your job is to{" "}
+                  <span className="text-red-400 font-bold">
+                    sabotage the code
+                  </span>
+                  . Do not get caught
+                  <br />
+                </div>
+              ) : (
+                <div className="text-xl text-gray-200 leading-relaxed">
+                  Your job is to{" "}
+                  <span className="text-green-400 font-bold">
+                    fixes the code{" "}
+                  </span>
+                  and{" "}
+                  <span className="text-green-400 font-bold">
+                    find the sabotager
+                  </span>
+                  <br />
+                </div>
+              )}
+
+              <div className="text-sm text-gray-400 mt-6">Game starting...</div>
+            </div>
+          )}
         </div>
       </div>
     );
