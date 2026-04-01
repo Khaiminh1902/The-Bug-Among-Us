@@ -6,6 +6,20 @@ const dev = true;
 const app = next({ dev });
 const handle = app.getRequestHandler();
 
+const gameplayTimers: {
+  [roomId: string]: {
+    time: number;
+    interval?: NodeJS.Timeout;
+  };
+} = {};
+
+const gameState: {
+  [roomId: string]: {
+    category: string;
+    time: number;
+  };
+} = {};
+
 type Roles = {
   [roomId: string]: {
     [socketId: string]: "civilian" | "sabotager";
@@ -47,6 +61,24 @@ app.prepare().then(() => {
     socket.on("start-vote-timer", (roomId: string) => {
       let time = 10;
 
+      const room = rooms[roomId];
+      if (!room) return;
+
+      const playerIds = room.map((p) => p.id);
+      const sabotagerCount = Math.max(1, Math.floor(playerIds.length / 4));
+
+      const shuffled = [...playerIds].sort(() => Math.random() - 0.5);
+
+      roles[roomId] = {};
+
+      shuffled.forEach((id, index) => {
+        roles[roomId][id] = index < sabotagerCount ? "sabotager" : "civilian";
+      });
+
+      playerIds.forEach((id) => {
+        io.to(id).emit("your-role", roles[roomId][id]);
+      });
+
       const interval = setInterval(() => {
         io.to(roomId).emit("vote-timer", time);
 
@@ -86,7 +118,25 @@ app.prepare().then(() => {
             }
           }
 
+          gameState[roomId] = {
+            category: winner,
+            time: 60,
+          };
+
           io.to(roomId).emit("vote-winner", winner);
+
+          gameplayTimers[roomId] = { time: 60 };
+
+          gameplayTimers[roomId].interval = setInterval(() => {
+            gameplayTimers[roomId].time--;
+
+            io.to(roomId).emit("gameplay-timer", gameplayTimers[roomId].time);
+
+            if (gameplayTimers[roomId].time <= 0) {
+              clearInterval(gameplayTimers[roomId].interval!);
+              io.to(roomId).emit("round-ended");
+            }
+          }, 1000);
         }
       }, 1000);
     });
@@ -127,6 +177,14 @@ app.prepare().then(() => {
       console.log("ROOM:", rooms[roomId]);
 
       io.to(roomId).emit("room-data", rooms[roomId]);
+
+      if (gameState[roomId]) {
+        socket.emit("vote-winner", gameState[roomId].category);
+        socket.emit("vote-timer", gameState[roomId].time);
+      }
+      if (gameplayTimers[roomId]) {
+        socket.emit("gameplay-timer", gameplayTimers[roomId].time);
+      }
     });
 
     socket.on("player-ready", (data: { roomId: string }) => {

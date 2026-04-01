@@ -124,7 +124,7 @@ export default function VotePage() {
                 <div className="text-xl text-gray-200 leading-relaxed">
                   Your job is to{" "}
                   <span className="text-green-400 font-bold">
-                    fixes the code{" "}
+                    fixes the code in time{" "}
                   </span>
                   and{" "}
                   <span className="text-green-400 font-bold">
