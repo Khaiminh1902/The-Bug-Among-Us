@@ -119,8 +119,10 @@ export default function Page() {
         <div className="border-t w-full">
           <div className="border-b h-[92%] p-2">The code goes here</div>
 
-          <div className="w-max p-4">
-            <span className="border p-2">Emergency</span>
+          <div className="w-full flex items-center justify-center mt-2.5">
+            <span className="border-black border p-2 bg-red-500 hover:bg-red-600 text-white cursor-pointer font-semibold">
+              Emergency
+            </span>
           </div>
         </div>
       </div>
