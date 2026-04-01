@@ -47,10 +47,10 @@ const Page = () => {
     >
       <div className="h-full w-full bg-black/30 flex flex-col items-center justify-center">
         <h1 className="flex flex-col items-center text-5xl font-extrabold text-blue-400 mb-5">
-          <span className="drop-shadow-[0_0_10px_rgba(96,165,250,0.8)]">
+          <span className="tracking-wider drop-shadow-[0_0_10px_rgba(96,165,250,0.8)]">
             The Bug
           </span>
-          <span className="text-[#5CC8FF] drop-shadow-[0_0_10px_rgba(147,197,253,0.8)]">
+          <span className="tracking-wider text-[#5CC8FF] drop-shadow-[0_0_10px_rgba(147,197,253,0.8)]">
             Among Us
           </span>
         </h1>
@@ -91,7 +91,7 @@ const Page = () => {
             onClick={closePopup}
           >
             <div
-              className="bg-white p-6 flex flex-col gap-4 relative"
+              className="bg-white/98 border p-6 flex flex-col gap-4 relative"
               onClick={(e) => e.stopPropagation()}
             >
               <button

@@ -9,12 +9,20 @@ const handle = app.getRequestHandler();
 type Player = {
   id: string;
   name: string;
+  ready: boolean;
 };
 
 type Rooms = {
   [roomId: string]: Player[];
 };
 
+type Votes = {
+  [roomId: string]: {
+    [category: string]: string[];
+  };
+};
+
+const votes: Votes = {};
 const rooms: Rooms = {};
 
 app.prepare().then(() => {
@@ -29,6 +37,52 @@ app.prepare().then(() => {
   io.on("connection", (socket) => {
     console.log("User connected:", socket.id);
 
+    socket.on("start-vote-timer", (roomId: string) => {
+      let time = 10;
+
+      const interval = setInterval(() => {
+        io.to(roomId).emit("vote-timer", time);
+
+        time--;
+
+        if (time < 0) {
+          clearInterval(interval);
+
+          const roomVotes = votes[roomId] || {};
+
+          let winner = "";
+          let max = 0;
+
+          for (const category in roomVotes) {
+            if (roomVotes[category].length > max) {
+              max = roomVotes[category].length;
+              winner = category;
+            }
+          }
+
+          io.to(roomId).emit("vote-winner", winner);
+        }
+      }, 1000);
+    });
+
+    socket.on("vote-category", (data: { roomId: string; category: string }) => {
+      const { roomId, category } = data;
+
+      if (!votes[roomId]) votes[roomId] = {};
+
+      for (const cat in votes[roomId]) {
+        votes[roomId][cat] = votes[roomId][cat].filter(
+          (id) => id !== socket.id,
+        );
+      }
+
+      if (!votes[roomId][category]) votes[roomId][category] = [];
+
+      votes[roomId][category].push(socket.id);
+
+      io.to(roomId).emit("vote-update", votes[roomId]);
+    });
+
     socket.on("join-room", (data: { roomId: string; name: string }) => {
       const { roomId, name } = data;
 
@@ -36,18 +90,53 @@ app.prepare().then(() => {
 
       if (!rooms[roomId]) rooms[roomId] = [];
 
-      const alreadyInRoom = rooms[roomId].find(
-        (player) => player.id === socket.id,
-      );
+      rooms[roomId] = rooms[roomId].filter((player) => player.name !== name);
 
-      if (!alreadyInRoom) {
-        rooms[roomId].push({
-          id: socket.id,
-          name,
-        });
-      }
+      rooms[roomId].push({
+        id: socket.id,
+        name,
+        ready: false,
+      });
+
+      console.log("ROOM:", rooms[roomId]);
 
       io.to(roomId).emit("room-data", rooms[roomId]);
+    });
+
+    socket.on("player-ready", (data: { roomId: string }) => {
+      const { roomId } = data;
+
+      console.log("READY CLICKED:", socket.id);
+      console.log("ROOM:", rooms[roomId]);
+
+      const room = rooms[roomId];
+      if (!room) return;
+
+      const player = room.find((p) => p.id === socket.id);
+      if (!player) return;
+
+      player.ready = true;
+
+      io.to(roomId).emit("room-data", room);
+
+      const allReady = room.length >= 2 && room.every((p) => p.ready === true);
+
+      if (allReady) {
+        console.log("All players ready in room:", roomId);
+
+        let countdown = 5;
+
+        const interval = setInterval(() => {
+          io.to(roomId).emit("countdown", countdown);
+
+          countdown--;
+
+          if (countdown < 0) {
+            clearInterval(interval);
+            io.to(roomId).emit("start-game");
+          }
+        }, 1000);
+      }
     });
 
     socket.on("disconnect", () => {
