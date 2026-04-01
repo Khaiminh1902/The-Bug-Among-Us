@@ -46,6 +46,10 @@ const votes: Votes = {};
 const rooms: Rooms = {};
 const roles: Roles = {};
 
+const gameplayReady: {
+  [roomId: string]: Set<string>;
+} = {};
+
 app.prepare().then(() => {
   const httpServer = createServer((req, res) => {
     handle(req, res);
@@ -58,13 +62,42 @@ app.prepare().then(() => {
   io.on("connection", (socket) => {
     console.log("User connected:", socket.id);
 
+    socket.on("player-ready-gameplay", ({ roomId }: { roomId: string }) => {
+      if (!gameplayReady[roomId]) gameplayReady[roomId] = new Set();
+
+      gameplayReady[roomId].add(socket.id);
+
+      const totalPlayers = rooms[roomId]?.length || 0;
+
+      if (
+        gameplayReady[roomId].size === totalPlayers &&
+        !gameplayTimers[roomId]
+      ) {
+        console.log("All players reached gameplay page:", roomId);
+
+        gameplayTimers[roomId] = { time: 60 };
+
+        gameplayTimers[roomId].interval = setInterval(() => {
+          gameplayTimers[roomId].time--;
+
+          io.to(roomId).emit("gameplay-timer", gameplayTimers[roomId].time);
+
+          if (gameplayTimers[roomId].time <= 0) {
+            clearInterval(gameplayTimers[roomId].interval!);
+            io.to(roomId).emit("round-ended");
+          }
+        }, 1000);
+      }
+    });
+
     socket.on("start-vote-timer", (roomId: string) => {
+      const room = rooms[roomId];
+      if (!room || room.length === 0) return;
+
       let time = 10;
 
-      const room = rooms[roomId];
-      if (!room) return;
-
       const playerIds = room.map((p) => p.id);
+
       const sabotagerCount = Math.max(1, Math.floor(playerIds.length / 4));
 
       const shuffled = [...playerIds].sort(() => Math.random() - 0.5);
@@ -79,27 +112,10 @@ app.prepare().then(() => {
         io.to(id).emit("your-role", roles[roomId][id]);
       });
 
+      console.log("Roles assigned:", roles[roomId]);
+
       const interval = setInterval(() => {
         io.to(roomId).emit("vote-timer", time);
-
-        const room = rooms[roomId];
-        if (!room) return;
-
-        const playerIds = room.map((p) => p.id);
-
-        const sabotagerCount = Math.max(1, Math.floor(playerIds.length / 4));
-
-        const shuffled = [...playerIds].sort(() => Math.random() - 0.5);
-
-        roles[roomId] = {};
-
-        shuffled.forEach((id, index) => {
-          roles[roomId][id] = index < sabotagerCount ? "sabotager" : "civilian";
-        });
-
-        playerIds.forEach((id) => {
-          io.to(id).emit("your-role", roles[roomId][id]);
-        });
 
         time--;
 
@@ -124,19 +140,6 @@ app.prepare().then(() => {
           };
 
           io.to(roomId).emit("vote-winner", winner);
-
-          gameplayTimers[roomId] = { time: 60 };
-
-          gameplayTimers[roomId].interval = setInterval(() => {
-            gameplayTimers[roomId].time--;
-
-            io.to(roomId).emit("gameplay-timer", gameplayTimers[roomId].time);
-
-            if (gameplayTimers[roomId].time <= 0) {
-              clearInterval(gameplayTimers[roomId].interval!);
-              io.to(roomId).emit("round-ended");
-            }
-          }, 1000);
         }
       }, 1000);
     });
@@ -166,18 +169,35 @@ app.prepare().then(() => {
 
       if (!rooms[roomId]) rooms[roomId] = [];
 
-      rooms[roomId] = rooms[roomId].filter((player) => player.name !== name);
+      const existingPlayer = rooms[roomId].find((p) => p.name === name);
 
-      rooms[roomId].push({
-        id: socket.id,
-        name,
-        ready: false,
-      });
+      if (existingPlayer) {
+        const oldId = existingPlayer.id;
+
+        existingPlayer.id = socket.id;
+
+        if (roles[roomId] && roles[roomId][oldId]) {
+          roles[roomId][socket.id] = roles[roomId][oldId];
+          delete roles[roomId][oldId];
+        }
+      } else {
+        rooms[roomId].push({
+          id: socket.id,
+          name,
+          ready: false,
+        });
+      }
 
       console.log("ROOM:", rooms[roomId]);
 
       io.to(roomId).emit("room-data", rooms[roomId]);
 
+      if (roles[roomId] && roles[roomId][socket.id]) {
+        socket.emit("your-role", roles[roomId][socket.id]);
+      }
+      if (gameplayReady[roomId]) {
+        gameplayReady[roomId].delete(socket.id);
+      }
       if (gameState[roomId]) {
         socket.emit("vote-winner", gameState[roomId].category);
         socket.emit("vote-timer", gameState[roomId].time);
@@ -224,13 +244,15 @@ app.prepare().then(() => {
     });
 
     socket.on("disconnect", () => {
-      for (const roomId in rooms) {
-        rooms[roomId] = rooms[roomId].filter(
-          (player) => player.id !== socket.id,
-        );
+      setTimeout(() => {
+        for (const roomId in rooms) {
+          const stillExists = rooms[roomId].some((p) => p.id === socket.id);
+          if (!stillExists) continue;
 
-        io.to(roomId).emit("room-data", rooms[roomId]);
-      }
+          rooms[roomId] = rooms[roomId].filter((p) => p.id !== socket.id);
+          io.to(roomId).emit("room-data", rooms[roomId]);
+        }
+      }, 2000);
     });
   });
 
