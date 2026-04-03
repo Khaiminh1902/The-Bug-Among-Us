@@ -1,10 +1,12 @@
 import { createServer } from "http";
 import next from "next";
 import { Server } from "socket.io";
+import * as Y from "yjs";
 
 const dev = true;
 const app = next({ dev });
 const handle = app.getRequestHandler();
+const docs: { [roomId: string]: Y.Doc } = {};
 
 const gameplayTimers: {
   [roomId: string]: {
@@ -61,6 +63,14 @@ app.prepare().then(() => {
 
   io.on("connection", (socket) => {
     console.log("User connected:", socket.id);
+
+    socket.on("yjs-update", ({ roomId, update }) => {
+      if (!docs[roomId]) docs[roomId] = new Y.Doc();
+
+      Y.applyUpdate(docs[roomId], update);
+
+      socket.to(roomId).emit("yjs-update", update);
+    });
 
     socket.on("player-ready-gameplay", ({ roomId }: { roomId: string }) => {
       if (!gameplayReady[roomId]) gameplayReady[roomId] = new Set();
