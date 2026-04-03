@@ -144,6 +144,19 @@ export default function Page() {
       setRound(newRound);
     });
 
+    socket.on(
+      "phase-transition",
+      ({ round: newRound, phase }: { round: number; phase: string }) => {
+        if (phase === "discussion") {
+          setEnding(true);
+          setTimeout(() => {
+            hasRedirected.current = true;
+            router.push(`/game/${roomId}/discussion`);
+          }, 800);
+        }
+      },
+    );
+
     socket.on("game-ended", () => {
       setEnding(true);
       setTimeout(() => {
@@ -167,16 +180,6 @@ export default function Page() {
       socketRef.current = null;
     };
   }, [roomId, router]);
-
-  useEffect(() => {
-    if (time === 0 && !hasRedirected.current) {
-      setEnding(true);
-      setTimeout(() => {
-        hasRedirected.current = true;
-        router.push(`/game/${roomId}/discussion`);
-      }, 800);
-    }
-  }, [time, router, roomId]);
 
   return (
     <div className="font-pixel flex flex-col h-screen bg-orange-100">

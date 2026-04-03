@@ -17,7 +17,7 @@ export default function Page() {
   const roomId = params.roomId as string;
   const router = useRouter();
   const socketRef = useRef<Socket | null>(null);
-  const [time, setTime] = useState(30);
+  const [time, setTime] = useState(10);
   const [players, setPlayers] = useState<Player[]>([]);
   const [round, setRound] = useState(1);
   const hasRedirected = useRef(false);
@@ -54,6 +54,19 @@ export default function Page() {
       setTime(t);
     });
 
+    socket.on(
+      "phase-transition",
+      ({ round: newRound, phase }: { round: number; phase: string }) => {
+        if (phase === "gameplay") {
+          setEnding(true);
+          setTimeout(() => {
+            hasRedirected.current = true;
+            router.push(`/game/${roomId}/gameplay`);
+          }, 800);
+        }
+      },
+    );
+
     socket.on("discussion-ended", () => {
       setEnding(true);
       setTimeout(() => {
@@ -78,21 +91,13 @@ export default function Page() {
     };
   }, [roomId, router]);
 
-  useEffect(() => {
-    if (time === 0 && !hasRedirected.current) {
-      setEnding(true);
-      setTimeout(() => {
-        hasRedirected.current = true;
-        router.push(`/game/${roomId}/gameplay`);
-      }, 800);
-    }
-  }, [time, router, roomId]);
-
   return (
     <div className="font-pixel flex flex-col h-screen bg-orange-100">
       <div className="w-screen h-15 grid grid-cols-3 items-center px-3">
         <div className="flex items-center gap-3">
-          <div className="border-2 p-1 w-fit bg-orange-400">Round {round}/4</div>
+          <div className="border-2 p-1 w-fit bg-orange-400">
+            Round {round}/4
+          </div>
           <div className="text-sm">Discussion</div>
         </div>
 
