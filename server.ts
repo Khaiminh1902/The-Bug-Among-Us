@@ -15,10 +15,20 @@ const gameplayTimers: {
   };
 } = {};
 
+const discussionTimers: {
+  [roomId: string]: {
+    time: number;
+    interval?: NodeJS.Timeout;
+  };
+} = {};
+
 const gameState: {
   [roomId: string]: {
     category: string;
     time: number;
+    round: number;
+    discussionDone?: boolean;
+    gameplayCount?: number;
   };
 } = {};
 
@@ -72,6 +82,15 @@ app.prepare().then(() => {
       socket.to(roomId).emit("yjs-update", update);
     });
 
+    socket.on("get-yjs-state", ({ roomId }) => {
+      if (docs[roomId]) {
+        const state = Y.encodeStateAsUpdate(docs[roomId]);
+        socket.emit("yjs-state", { roomId, state: Array.from(state) });
+      } else {
+        socket.emit("yjs-state", { roomId, state: [] });
+      }
+    });
+
     socket.on("player-ready-gameplay", ({ roomId }: { roomId: string }) => {
       if (!gameplayReady[roomId]) gameplayReady[roomId] = new Set();
 
@@ -85,7 +104,7 @@ app.prepare().then(() => {
       ) {
         console.log("All players reached gameplay page:", roomId);
 
-        gameplayTimers[roomId] = { time: 60 };
+        gameplayTimers[roomId] = { time: 10 };
 
         gameplayTimers[roomId].interval = setInterval(() => {
           gameplayTimers[roomId].time--;
@@ -94,10 +113,51 @@ app.prepare().then(() => {
 
           if (gameplayTimers[roomId].time <= 0) {
             clearInterval(gameplayTimers[roomId].interval!);
-            io.to(roomId).emit("round-ended");
+            delete gameplayTimers[roomId];
+            gameplayReady[roomId] = new Set<string>();
+
+            if (gameState[roomId]) {
+              gameState[roomId].round++;
+              gameState[roomId].discussionDone = false;
+              console.log(
+                "Gameplay ended, round now:",
+                gameState[roomId].round,
+              );
+              io.to(roomId).emit("round-update", gameState[roomId].round);
+              io.to(roomId).emit("vote-winner", gameState[roomId].category);
+
+              if (gameState[roomId].round > 4) {
+                io.to(roomId).emit("game-ended");
+              }
+            }
           }
         }, 1000);
       }
+    });
+
+    socket.on("player-ready-discussion", ({ roomId }: { roomId: string }) => {
+      if (!discussionTimers[roomId] && !gameState[roomId]?.discussionDone) {
+        discussionTimers[roomId] = { time: 10 };
+
+        discussionTimers[roomId].interval = setInterval(() => {
+          discussionTimers[roomId].time--;
+
+          io.to(roomId).emit("discussion-timer", discussionTimers[roomId].time);
+
+          if (discussionTimers[roomId].time <= 0) {
+            clearInterval(discussionTimers[roomId].interval!);
+            delete discussionTimers[roomId];
+
+            if (gameState[roomId]) {
+              gameState[roomId].discussionDone = true;
+            }
+
+            io.to(roomId).emit("discussion-ended");
+          }
+        }, 1000);
+      }
+
+      io.to(roomId).emit("discussion-timer", discussionTimers[roomId].time);
     });
 
     socket.on("start-vote-timer", (roomId: string) => {
@@ -146,7 +206,10 @@ app.prepare().then(() => {
 
           gameState[roomId] = {
             category: winner,
-            time: 60,
+            time: 10,
+            round: 1,
+            discussionDone: false,
+            gameplayCount: 0,
           };
 
           io.to(roomId).emit("vote-winner", winner);
@@ -211,6 +274,12 @@ app.prepare().then(() => {
       if (gameState[roomId]) {
         socket.emit("vote-winner", gameState[roomId].category);
         socket.emit("vote-timer", gameState[roomId].time);
+        socket.emit("round-update", gameState[roomId].round);
+        if (docs[roomId]) {
+          socket.emit("yjs-state", {
+            state: Array.from(Y.encodeStateAsUpdate(docs[roomId])),
+          });
+        }
       }
       if (gameplayTimers[roomId]) {
         socket.emit("gameplay-timer", gameplayTimers[roomId].time);
@@ -266,7 +335,7 @@ app.prepare().then(() => {
     });
   });
 
-  httpServer.listen(3000, () => {
+  httpServer.listen(1000, () => {
     console.log("Server running");
   });
 });

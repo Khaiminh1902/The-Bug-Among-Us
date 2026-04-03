@@ -30,9 +30,10 @@ export default function Page() {
   const socketRef = useRef<Socket | null>(null);
   const [ready, setReady] = useState(false);
   const [category, setCategory] = useState("Waiting...");
-  const [time, setTime] = useState(60);
+  const [time, setTime] = useState(10);
   const [players, setPlayers] = useState<Player[]>([]);
   const [role, setRole] = useState<string | null>(null);
+  const [round, setRound] = useState(1);
   const editorRef = useRef<any>(null);
   const ydocRef = useRef<Y.Doc | null>(null);
   const awarenessRef = useRef<Awareness | null>(null);
@@ -111,18 +112,20 @@ export default function Page() {
       localStorage.setItem("playerId", playerId);
     }
 
-    socket.emit("join-room", {
-      roomId,
-      name: localStorage.getItem("playerName"),
-      playerId: localStorage.getItem("playerId"),
-    });
-
     socket.on("vote-winner", (winner: string) => {
       setCategory(winner);
     });
 
     socket.on("gameplay-timer", (t: number) => {
       setTime(t);
+    });
+
+    socket.on("yjs-state", async (data: { state: number[] }) => {
+      if (data.state && data.state.length > 0 && ydocRef.current) {
+        const Y = await import("yjs");
+        const uint8 = new Uint8Array(data.state);
+        Y.applyUpdate(ydocRef.current, uint8);
+      }
     });
 
     socket.on("room-data", (data: Player[]) => {
@@ -133,24 +136,44 @@ export default function Page() {
       setRole(r);
     });
 
+    socket.on("round-ended", (newRound: number) => {
+      setRound(newRound);
+    });
+
+    socket.on("round-update", (newRound: number) => {
+      setRound(newRound);
+    });
+
+    socket.on("game-ended", () => {
+      setEnding(true);
+      setTimeout(() => {
+        hasRedirected.current = true;
+        router.push(`/`);
+      }, 800);
+    });
+
+    socket.emit("join-room", {
+      roomId,
+      name: localStorage.getItem("playerName"),
+      playerId: localStorage.getItem("playerId"),
+    });
+
+    socket.emit("get-yjs-state", { roomId });
+
+    socket.emit("player-ready-gameplay", { roomId });
+
     return () => {
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [roomId]);
-
-  useEffect(() => {
-    if (!role || !socketRef.current) return;
-
-    socketRef.current.emit("player-ready-gameplay", { roomId });
-  }, [role, roomId]);
+  }, [roomId, router]);
 
   useEffect(() => {
     if (time === 0 && !hasRedirected.current) {
       setEnding(true);
       setTimeout(() => {
         hasRedirected.current = true;
-        router.push(`./discussion`);
+        router.push(`/game/${roomId}/discussion`);
       }, 800);
     }
   }, [time, router, roomId]);
@@ -159,7 +182,9 @@ export default function Page() {
     <div className="font-pixel flex flex-col h-screen bg-orange-100">
       <div className="w-screen h-15 grid grid-cols-3 items-center px-3">
         <div className="flex items-center gap-3">
-          <div className="border-2 p-1 w-fit bg-orange-400">Round 1/4</div>
+          <div className="border-2 p-1 w-fit bg-orange-400">
+            Round {round}/4
+          </div>
           <div className="text-sm">{category}</div>
         </div>
 
