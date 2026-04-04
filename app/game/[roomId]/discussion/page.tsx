@@ -1,4 +1,3 @@
-/* eslint-disable react-hooks/set-state-in-effect */
 "use client";
 
 import { useEffect, useState, useRef } from "react";
@@ -56,6 +55,7 @@ export default function Page() {
 
     socket.on(
       "phase-transition",
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       ({ round: newRound, phase }: { round: number; phase: string }) => {
         if (phase === "gameplay") {
           setEnding(true);
