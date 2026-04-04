@@ -54,9 +54,21 @@ type Votes = {
   };
 };
 
+type ChatMessage = {
+  id: string;
+  playerId: string;
+  playerName: string;
+  message: string;
+  timestamp: number;
+  color: string;
+};
+
 const votes: Votes = {};
 const rooms: Rooms = {};
 const roles: Roles = {};
+const chatMessages: {
+  [roomId: string]: ChatMessage[];
+} = {};
 
 const playerColors = [
   "#FF6B6B", // Red
@@ -168,6 +180,7 @@ app.prepare().then(() => {
 
         discussionTimers[roomId].interval = setInterval(() => {
           discussionTimers[roomId].time--;
+
           io.to(roomId).emit("discussion-timer", discussionTimers[roomId].time);
 
           if (discussionTimers[roomId].time <= 0) {
@@ -314,6 +327,11 @@ app.prepare().then(() => {
 
       io.to(roomId).emit("room-data", rooms[roomId]);
 
+      // Send existing chat messages to the newly joined player
+      if (chatMessages[roomId]) {
+        socket.emit("chat-history", chatMessages[roomId]);
+      }
+
       if (roles[roomId] && roles[roomId][socket.id]) {
         socket.emit("your-role", roles[roomId][socket.id]);
       }
@@ -371,6 +389,49 @@ app.prepare().then(() => {
         }, 1000);
       }
     });
+
+    socket.on(
+      "send-chat-message",
+      (data: { roomId: string; message: string }) => {
+        const { roomId, message } = data;
+
+        const room = rooms[roomId];
+        if (!room) return;
+
+        const player = room.find((p) => p.id === socket.id);
+        if (!player) return;
+
+        // Trim message and check if it's not empty
+        const trimmedMessage = message.trim();
+        if (!trimmedMessage) return;
+
+        // Create chat message
+        const chatMessage: ChatMessage = {
+          id: crypto.randomUUID(),
+          playerId: socket.id,
+          playerName: player.name,
+          message: trimmedMessage,
+          timestamp: Date.now(),
+          color: player.color,
+        };
+
+        // Initialize chat messages array for room if it doesn't exist
+        if (!chatMessages[roomId]) {
+          chatMessages[roomId] = [];
+        }
+
+        // Add message to room's chat history
+        chatMessages[roomId].push(chatMessage);
+
+        // Keep only last 100 messages to prevent memory issues
+        if (chatMessages[roomId].length > 100) {
+          chatMessages[roomId] = chatMessages[roomId].slice(-100);
+        }
+
+        // Broadcast message to all players in the room
+        io.to(roomId).emit("chat-message", chatMessage);
+      },
+    );
 
     socket.on("disconnect", () => {
       setTimeout(() => {

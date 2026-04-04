@@ -88,14 +88,6 @@ export default function Page() {
       }, 800);
     });
 
-    socket.on("discussion-ended", () => {
-      setEnding(true);
-      setTimeout(() => {
-        hasRedirected.current = true;
-        router.push(`/game/${roomId}/gameplay`);
-      }, 800);
-    });
-
     socket.on("game-ended", () => {
       setEnding(true);
       setTimeout(() => {
@@ -104,7 +96,6 @@ export default function Page() {
       }, 800);
     });
 
-    // Chat message listeners
     socket.on("chat-history", (messages: ChatMessage[]) => {
       setChatMessages(messages);
     });
@@ -121,7 +112,6 @@ export default function Page() {
     };
   }, [roomId, router]);
 
-  // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatMessages]);
@@ -196,12 +186,6 @@ export default function Page() {
               </div>
             ))}
           </div>
-          <button
-            onClick={() => router.push(`/game/${roomId}/player-vote`)}
-            className="bg-blue-500 text-white border-2 border-blue-700 p-2 w-full mb-3 hover:bg-blue-400 transition-colors"
-          >
-            Start Player Vote
-          </button>
           <div className="bg-green-200 w-full h-10 flex items-center justify-center border-2 hover:bg-green-100 cursor-pointer">
             Skip Vote
           </div>
