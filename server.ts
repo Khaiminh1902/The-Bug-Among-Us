@@ -41,6 +41,7 @@ type Player = {
   id: string;
   name: string;
   ready: boolean;
+  color: string;
 };
 
 type Rooms = {
@@ -56,6 +57,21 @@ type Votes = {
 const votes: Votes = {};
 const rooms: Rooms = {};
 const roles: Roles = {};
+
+const playerColors = [
+  "#FF6B6B", // Red
+  "#4ECDC4", // Teal
+  "#45B7D1", // Blue
+  "#FFA07A", // Light Salmon
+  "#98D8C8", // Mint
+  "#F7DC6F", // Yellow
+  "#BB8FCE", // Light Purple
+  "#85C1E9", // Light Blue
+  "#F8C471", // Orange
+  "#82E0AA", // Light Green
+  "#F1948A", // Light Coral
+  "#AED6F1", // Pale Blue
+];
 
 const gameplayReady: {
   [roomId: string]: Set<string>;
@@ -107,7 +123,7 @@ app.prepare().then(() => {
       ) {
         console.log("All players reached gameplay page:", roomId);
 
-        gameplayTimers[roomId] = { time: 10 };
+        gameplayTimers[roomId] = { time: 120 };
 
         gameplayTimers[roomId].interval = setInterval(() => {
           gameplayTimers[roomId].time--;
@@ -148,7 +164,7 @@ app.prepare().then(() => {
       ) {
         console.log("All players reached discussion page:", roomId);
 
-        discussionTimers[roomId] = { time: 10 };
+        discussionTimers[roomId] = { time: 60 };
 
         discussionTimers[roomId].interval = setInterval(() => {
           discussionTimers[roomId].time--;
@@ -277,10 +293,21 @@ app.prepare().then(() => {
           delete roles[roomId][oldId];
         }
       } else {
+        // Assign color to new player
+        const usedColors = rooms[roomId].map((p) => p.color);
+        const availableColors = playerColors.filter(
+          (color) => !usedColors.includes(color),
+        );
+        const assignedColor =
+          availableColors.length > 0
+            ? availableColors[0]
+            : playerColors[rooms[roomId].length % playerColors.length];
+
         rooms[roomId].push({
           id: socket.id,
           name,
           ready: false,
+          color: assignedColor,
         });
       }
 

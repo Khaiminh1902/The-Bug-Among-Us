@@ -17,6 +17,7 @@ type Player = {
   id: string;
   name: string;
   ready: boolean;
+  color: string;
 };
 
 const Editor = dynamic(() => import("@monaco-editor/react"), {
@@ -30,7 +31,7 @@ export default function Page() {
   const socketRef = useRef<Socket | null>(null);
   const [ready, setReady] = useState(false);
   const [category, setCategory] = useState("Waiting...");
-  const [time, setTime] = useState(10);
+  const [time, setTime] = useState(120);
   const [players, setPlayers] = useState<Player[]>([]);
   const [role, setRole] = useState<string | null>(null);
   const [round, setRound] = useState(1);
@@ -146,7 +147,7 @@ export default function Page() {
 
     socket.on(
       "phase-transition",
-      ({ round: newRound, phase }: { round: number; phase: string }) => {
+      ({ phase }: { round: number; phase: string }) => {
         if (phase === "discussion") {
           setEnding(true);
           setTimeout(() => {
@@ -215,7 +216,14 @@ export default function Page() {
           <div className="text-xl font-bold mb-3">Players</div>
 
           {players.map((p) => (
-            <div key={p.id} className="border p-2 mb-2 text-sm">
+            <div
+              key={p.id}
+              className="border p-2 mb-2 text-sm flex items-center"
+            >
+              <div
+                className="w-3 h-3 border mr-2"
+                style={{ backgroundColor: p.color }}
+              ></div>
               {p.name}
             </div>
           ))}

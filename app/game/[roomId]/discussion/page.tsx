@@ -4,11 +4,13 @@ import { useEffect, useState, useRef } from "react";
 import { io, Socket } from "socket.io-client";
 import { useParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
+import { LuSend } from "react-icons/lu";
 
 type Player = {
   id: string;
   name: string;
   ready: boolean;
+  color: string;
 };
 
 export default function Page() {
@@ -16,7 +18,7 @@ export default function Page() {
   const roomId = params.roomId as string;
   const router = useRouter();
   const socketRef = useRef<Socket | null>(null);
-  const [time, setTime] = useState(10);
+  const [time, setTime] = useState(60);
   const [players, setPlayers] = useState<Player[]>([]);
   const [round, setRound] = useState(1);
   const hasRedirected = useRef(false);
@@ -55,8 +57,7 @@ export default function Page() {
 
     socket.on(
       "phase-transition",
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      ({ round: newRound, phase }: { round: number; phase: string }) => {
+      ({ phase }: { round: number; phase: string }) => {
         if (phase === "gameplay") {
           setEnding(true);
           setTimeout(() => {
@@ -119,10 +120,52 @@ export default function Page() {
         </div>
       </div>
 
-      <div className="flex-1 flex items-center justify-center">
+      <div className="flex-1 flex items-center justify-center gap-10">
         <div className="text-center">
-          <h1 className="text-4xl font-bold mb-4">Discuss and Vote!</h1>
-          <p className="text-xl">Find the sabotager before time runs out.</p>
+          <div>
+            <h1 className="text-3xl font-bold mb-1 tracking-widest">
+              WHO IS THE SABOTAGER?
+            </h1>
+            <p className="text-sm mb-5">
+              Find the sabotager before time runs out
+            </p>
+          </div>
+          <div className="">
+            {players.map((player) => (
+              <div
+                key={player.id}
+                className="flex items-center bg-white border-2 mb-4 h-10 p-2 tracking-wide cursor-pointer hover:bg-gray-100"
+              >
+                <div
+                  className="w-4 h-4 border-2 mr-2"
+                  style={{ backgroundColor: player.color }}
+                ></div>
+                <span className="font-semibold">{player.name}</span>
+              </div>
+            ))}
+          </div>
+          <div className="bg-green-200 w-full h-10 flex items-center justify-center border-2 hover:bg-green-100 cursor-pointer">
+            Skip Vote
+          </div>
+        </div>
+        <div className="bg-blue-100 h-[80%] w-[20%] border-2 flex flex-col overflow-hidden">
+          <div className="border-b-2 p-2 font-semibold tracking-wide text-lg">
+            Chat
+          </div>
+
+          <div className="flex-1 overflow-auto">
+            {/* Chat messages will go here */}
+          </div>
+
+          <div className="border-t-2 p-2 flex items-center gap-2">
+            <input
+              className="border-2 p-2 flex-1 min-h-10 max-h-16 focus:outline-none bg-blue-200"
+              placeholder="Type a message..."
+            />
+            <div className="border-2 cursor-pointer flex items-center justify-center bg-blue-200 hover:bg-blue-300">
+              <LuSend size={40} className="p-2" />
+            </div>
+          </div>
         </div>
       </div>
       {ending && (

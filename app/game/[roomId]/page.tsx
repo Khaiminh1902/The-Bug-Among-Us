@@ -12,6 +12,7 @@ type Player = {
   id: string;
   name: string;
   ready: boolean;
+  color: string;
 };
 
 export default function Page() {
@@ -104,7 +105,13 @@ export default function Page() {
                 key={player.id}
                 className="w-70 h-10 border p-2 flex items-center justify-between"
               >
-                <span>{player.name}</span>
+                <div className="flex items-center gap-2">
+                  <div
+                    className="w-4 h-4 border"
+                    style={{ backgroundColor: player.color }}
+                  ></div>
+                  <span>{player.name}</span>
+                </div>
 
                 {player.ready && (
                   <span className="text-green-500 font-bold">✓</span>
