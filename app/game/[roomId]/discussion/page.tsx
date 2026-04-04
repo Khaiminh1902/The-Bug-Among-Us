@@ -13,6 +13,15 @@ type Player = {
   color: string;
 };
 
+type ChatMessage = {
+  id: string;
+  playerId: string;
+  playerName: string;
+  message: string;
+  timestamp: number;
+  color: string;
+};
+
 export default function Page() {
   const params = useParams();
   const roomId = params.roomId as string;
@@ -23,6 +32,9 @@ export default function Page() {
   const [round, setRound] = useState(1);
   const hasRedirected = useRef(false);
   const [ending, setEnding] = useState(false);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [messageInput, setMessageInput] = useState("");
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -76,12 +88,29 @@ export default function Page() {
       }, 800);
     });
 
+    socket.on("discussion-ended", () => {
+      setEnding(true);
+      setTimeout(() => {
+        hasRedirected.current = true;
+        router.push(`/game/${roomId}/gameplay`);
+      }, 800);
+    });
+
     socket.on("game-ended", () => {
       setEnding(true);
       setTimeout(() => {
         hasRedirected.current = true;
         router.push(`/`);
       }, 800);
+    });
+
+    // Chat message listeners
+    socket.on("chat-history", (messages: ChatMessage[]) => {
+      setChatMessages(messages);
+    });
+
+    socket.on("chat-message", (message: ChatMessage) => {
+      setChatMessages((prev) => [...prev, message]);
     });
 
     socket.emit("player-ready-discussion", { roomId });
@@ -91,6 +120,29 @@ export default function Page() {
       socketRef.current = null;
     };
   }, [roomId, router]);
+
+  // Auto-scroll to bottom when new messages arrive
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chatMessages]);
+
+  const sendMessage = () => {
+    if (!messageInput.trim() || !socketRef.current) return;
+
+    socketRef.current.emit("send-chat-message", {
+      roomId,
+      message: messageInput.trim(),
+    });
+
+    setMessageInput("");
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  };
 
   return (
     <div className="font-pixel flex flex-col h-screen bg-orange-100">
@@ -144,25 +196,60 @@ export default function Page() {
               </div>
             ))}
           </div>
+          <button
+            onClick={() => router.push(`/game/${roomId}/player-vote`)}
+            className="bg-blue-500 text-white border-2 border-blue-700 p-2 w-full mb-3 hover:bg-blue-400 transition-colors"
+          >
+            Start Player Vote
+          </button>
           <div className="bg-green-200 w-full h-10 flex items-center justify-center border-2 hover:bg-green-100 cursor-pointer">
             Skip Vote
           </div>
         </div>
-        <div className="bg-blue-100 h-[80%] w-[20%] border-2 flex flex-col overflow-hidden">
+        <div className="bg-blue-100 h-96 w-[20%] border-2 flex flex-col overflow-hidden">
           <div className="border-b-2 p-2 font-semibold tracking-wide text-lg">
             Chat
           </div>
 
-          <div className="flex-1 overflow-auto">
-            {/* Chat messages will go here */}
+          <div
+            className="flex-1 overflow-y-auto p-2 space-y-2"
+            style={{
+              scrollbarWidth: "thin",
+              scrollbarColor: "#93c5fd #bfdbfe",
+            }}
+          >
+            {chatMessages.map((msg) => (
+              <div key={msg.id} className="text-sm">
+                <div className="flex items-center gap-1 mb-1">
+                  <div
+                    className="w-3 h-3 border border-gray-400 rounded-full"
+                    style={{ backgroundColor: msg.color }}
+                  ></div>
+                  <span className="font-semibold text-xs">
+                    {msg.playerName}
+                  </span>
+                </div>
+                <div className="bg-white border rounded p-2 ml-4 wrap-break-words">
+                  {msg.message}
+                </div>
+              </div>
+            ))}
+            <div ref={messagesEndRef} />
           </div>
 
           <div className="border-t-2 p-2 flex items-center gap-2">
             <input
+              value={messageInput}
+              onChange={(e) => setMessageInput(e.target.value)}
+              onKeyPress={handleKeyPress}
               className="border-2 p-2 flex-1 min-h-10 max-h-16 focus:outline-none bg-blue-200"
               placeholder="Type a message..."
+              maxLength={200}
             />
-            <div className="border-2 cursor-pointer flex items-center justify-center bg-blue-200 hover:bg-blue-300">
+            <div
+              onClick={sendMessage}
+              className="border-2 cursor-pointer flex items-center justify-center bg-blue-200 hover:bg-blue-300 transition-colors"
+            >
               <LuSend size={40} className="p-2" />
             </div>
           </div>

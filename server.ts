@@ -168,7 +168,6 @@ app.prepare().then(() => {
 
         discussionTimers[roomId].interval = setInterval(() => {
           discussionTimers[roomId].time--;
-
           io.to(roomId).emit("discussion-timer", discussionTimers[roomId].time);
 
           if (discussionTimers[roomId].time <= 0) {
