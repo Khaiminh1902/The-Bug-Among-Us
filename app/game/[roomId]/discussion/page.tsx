@@ -3,7 +3,6 @@
 import { useEffect, useState, useRef } from "react";
 import { io, Socket } from "socket.io-client";
 import { useParams, useRouter } from "next/navigation";
-import { motion } from "framer-motion";
 import { LuSend } from "react-icons/lu";
 
 type Player = {
@@ -240,11 +239,9 @@ export default function Page() {
         </div>
       </div>
       {ending && (
-        <motion.div
+        <div
           className="fixed inset-0 bg-black z-50"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.8 }}
+          style={{ opacity: 1, transition: "opacity 0.8s" }}
         />
       )}
     </div>

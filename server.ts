@@ -71,18 +71,18 @@ const chatMessages: {
 } = {};
 
 const playerColors = [
-  "#FF6B6B", // Red
-  "#4ECDC4", // Teal
-  "#45B7D1", // Blue
-  "#FFA07A", // Light Salmon
-  "#98D8C8", // Mint
-  "#F7DC6F", // Yellow
-  "#BB8FCE", // Light Purple
-  "#85C1E9", // Light Blue
-  "#F8C471", // Orange
-  "#82E0AA", // Light Green
-  "#F1948A", // Light Coral
-  "#AED6F1", // Pale Blue
+  "#FF6B6B",
+  "#4ECDC4",
+  "#45B7D1",
+  "#FFA07A",
+  "#98D8C8",
+  "#F7DC6F",
+  "#BB8FCE",
+  "#85C1E9",
+  "#F8C471",
+  "#82E0AA",
+  "#F1948A",
+  "#AED6F1",
 ];
 
 const gameplayReady: {
@@ -190,7 +190,6 @@ app.prepare().then(() => {
 
             if (gameState[roomId]) {
               if (gameState[roomId].round < 4) {
-                // Move to next round's gameplay
                 gameState[roomId].round++;
                 gameState[roomId].phase = "gameplay";
                 console.log(
@@ -202,7 +201,6 @@ app.prepare().then(() => {
                   phase: "gameplay",
                 });
               } else {
-                // Game is complete after round 4 discussion
                 console.log("Game completed after round 4");
                 io.to(roomId).emit("game-ended");
               }
@@ -305,7 +303,6 @@ app.prepare().then(() => {
           delete roles[roomId][oldId];
         }
       } else {
-        // Assign color to new player
         const usedColors = rooms[roomId].map((p) => p.color);
         const availableColors = playerColors.filter(
           (color) => !usedColors.includes(color),
@@ -327,7 +324,6 @@ app.prepare().then(() => {
 
       io.to(roomId).emit("room-data", rooms[roomId]);
 
-      // Send existing chat messages to the newly joined player
       if (chatMessages[roomId]) {
         socket.emit("chat-history", chatMessages[roomId]);
       }
@@ -401,11 +397,9 @@ app.prepare().then(() => {
         const player = room.find((p) => p.id === socket.id);
         if (!player) return;
 
-        // Trim message and check if it's not empty
         const trimmedMessage = message.trim();
         if (!trimmedMessage) return;
 
-        // Create chat message
         const chatMessage: ChatMessage = {
           id: crypto.randomUUID(),
           playerId: socket.id,
@@ -415,20 +409,16 @@ app.prepare().then(() => {
           color: player.color,
         };
 
-        // Initialize chat messages array for room if it doesn't exist
         if (!chatMessages[roomId]) {
           chatMessages[roomId] = [];
         }
 
-        // Add message to room's chat history
         chatMessages[roomId].push(chatMessage);
 
-        // Keep only last 100 messages to prevent memory issues
         if (chatMessages[roomId].length > 100) {
           chatMessages[roomId] = chatMessages[roomId].slice(-100);
         }
 
-        // Broadcast message to all players in the room
         io.to(roomId).emit("chat-message", chatMessage);
       },
     );

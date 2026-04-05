@@ -8,7 +8,6 @@ import { useEffect, useState, useRef } from "react";
 import { io, Socket } from "socket.io-client";
 import { useParams } from "next/navigation";
 import { IoPeopleOutline } from "react-icons/io5";
-import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
@@ -169,7 +168,6 @@ export default function Page() {
     socket.emit("join-room", {
       roomId,
       name: localStorage.getItem("playerName"),
-      playerId: localStorage.getItem("playerId"),
     });
 
     socket.emit("get-yjs-state", { roomId });
@@ -269,7 +267,7 @@ export default function Page() {
 
           <div className="w-full flex items-center justify-center mt-2.5">
             <span className="border-black border p-2 bg-red-500 hover:bg-red-600 text-white cursor-pointer font-semibold">
-              <Link href="./discussion">Emergency</Link>
+              Emergency
             </span>
           </div>
         </div>
