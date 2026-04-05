@@ -29,9 +29,15 @@ export default function Page() {
     const name = localStorage.getItem("playerName");
     if (!name) return;
 
+    let playerId = localStorage.getItem("playerId");
+    if (!playerId) {
+      playerId = crypto.randomUUID();
+      localStorage.setItem("playerId", playerId);
+    }
+
     socketRef.current = io();
 
-    socketRef.current.emit("join-room", { roomId, name });
+    socketRef.current.emit("join-room", { roomId, name, playerId });
 
     socketRef.current.on("room-data", (roomPlayers: Player[]) => {
       setPlayers(roomPlayers);
@@ -128,7 +134,7 @@ export default function Page() {
         <button
           onClick={() => {
             console.log("clicked ready");
-            socketRef.current?.emit("player-ready", { roomId });
+            socketRef.current?.emit("player-ready", { roomId, playerId: localStorage.getItem("playerId") });
           }}
           className="bg-green-400 p-1 pl-4 pr-4 mt-5 border hover:bg-green-300 cursor-pointer"
         >

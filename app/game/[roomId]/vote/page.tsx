@@ -34,12 +34,19 @@ export default function VotePage() {
   useEffect(() => {
     if (socketRef.current) return;
 
+    let playerId = localStorage.getItem("playerId");
+    if (!playerId) {
+      playerId = crypto.randomUUID();
+      localStorage.setItem("playerId", playerId);
+    }
+
     const socket = io();
     socketRef.current = socket;
 
     socket.emit("join-room", {
       roomId,
       name: localStorage.getItem("playerName"),
+      playerId: localStorage.getItem("playerId"),
     });
 
     socket.emit("start-vote-timer", roomId);
@@ -81,6 +88,7 @@ export default function VotePage() {
     socketRef.current?.emit("vote-category", {
       roomId,
       category,
+      playerId: localStorage.getItem("playerId"),
     });
   };
 

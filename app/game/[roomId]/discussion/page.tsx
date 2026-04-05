@@ -121,6 +121,7 @@ export default function Page() {
     socketRef.current.emit("send-chat-message", {
       roomId,
       message: messageInput.trim(),
+      playerId: localStorage.getItem("playerId"),
     });
 
     setMessageInput("");

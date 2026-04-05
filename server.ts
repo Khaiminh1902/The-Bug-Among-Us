@@ -70,6 +70,12 @@ const chatMessages: {
   [roomId: string]: ChatMessage[];
 } = {};
 
+const socketToPlayer: {
+  [socketId: string]: string;
+} = {};
+
+const connectedPlayerIds: Set<string> = new Set();
+
 const playerColors = [
   "#FF6B6B",
   "#4ECDC4",
@@ -122,93 +128,104 @@ app.prepare().then(() => {
       }
     });
 
-    socket.on("player-ready-gameplay", ({ roomId }: { roomId: string }) => {
-      if (!gameplayReady[roomId]) gameplayReady[roomId] = new Set();
+    socket.on(
+      "player-ready-gameplay",
+      ({ roomId, playerId }: { roomId: string; playerId?: string }) => {
+        if (!gameplayReady[roomId]) gameplayReady[roomId] = new Set();
 
-      gameplayReady[roomId].add(socket.id);
+        const clientPlayerId = playerId || socket.id;
+        gameplayReady[roomId].add(clientPlayerId);
 
-      const totalPlayers = rooms[roomId]?.length || 0;
+        const totalPlayers = rooms[roomId]?.length || 0;
 
-      if (
-        gameplayReady[roomId].size === totalPlayers &&
-        !gameplayTimers[roomId]
-      ) {
-        console.log("All players reached gameplay page:", roomId);
+        if (
+          gameplayReady[roomId].size === totalPlayers &&
+          !gameplayTimers[roomId]
+        ) {
+          console.log("All players reached gameplay page:", roomId);
 
-        gameplayTimers[roomId] = { time: 120 };
+          gameplayTimers[roomId] = { time: 120 };
 
-        gameplayTimers[roomId].interval = setInterval(() => {
-          gameplayTimers[roomId].time--;
+          gameplayTimers[roomId].interval = setInterval(() => {
+            gameplayTimers[roomId].time--;
 
-          io.to(roomId).emit("gameplay-timer", gameplayTimers[roomId].time);
+            io.to(roomId).emit("gameplay-timer", gameplayTimers[roomId].time);
 
-          if (gameplayTimers[roomId].time <= 0) {
-            clearInterval(gameplayTimers[roomId].interval!);
-            delete gameplayTimers[roomId];
-            gameplayReady[roomId] = new Set<string>();
+            if (gameplayTimers[roomId].time <= 0) {
+              clearInterval(gameplayTimers[roomId].interval!);
+              delete gameplayTimers[roomId];
+              gameplayReady[roomId] = new Set<string>();
 
-            if (gameState[roomId]) {
-              gameState[roomId].phase = "discussion";
-              console.log(
-                "Gameplay ended, moving to discussion. Round:",
-                gameState[roomId].round,
-              );
-              io.to(roomId).emit("phase-transition", {
-                round: gameState[roomId].round,
-                phase: "discussion",
-              });
-            }
-          }
-        }, 1000);
-      }
-    });
-
-    socket.on("player-ready-discussion", ({ roomId }: { roomId: string }) => {
-      if (!discussionReady[roomId]) discussionReady[roomId] = new Set();
-
-      discussionReady[roomId].add(socket.id);
-
-      const totalPlayers = rooms[roomId]?.length || 0;
-
-      if (
-        discussionReady[roomId].size === totalPlayers &&
-        !discussionTimers[roomId]
-      ) {
-        console.log("All players reached discussion page:", roomId);
-
-        discussionTimers[roomId] = { time: 60 };
-
-        discussionTimers[roomId].interval = setInterval(() => {
-          discussionTimers[roomId].time--;
-
-          io.to(roomId).emit("discussion-timer", discussionTimers[roomId].time);
-
-          if (discussionTimers[roomId].time <= 0) {
-            clearInterval(discussionTimers[roomId].interval!);
-            delete discussionTimers[roomId];
-            discussionReady[roomId] = new Set<string>();
-
-            if (gameState[roomId]) {
-              if (gameState[roomId].round < 4) {
-                gameState[roomId].round++;
-                gameState[roomId].phase = "gameplay";
+              if (gameState[roomId]) {
+                gameState[roomId].phase = "discussion";
                 console.log(
-                  "Discussion ended, moving to next round. Round:",
+                  "Gameplay ended, moving to discussion. Round:",
                   gameState[roomId].round,
                 );
                 io.to(roomId).emit("phase-transition", {
                   round: gameState[roomId].round,
-                  phase: "gameplay",
+                  phase: "discussion",
                 });
-              } else {
-                console.log("Game completed after round 4");
-                io.to(roomId).emit("game-ended");
               }
             }
-          }
-        }, 1000);
-      }
-    });
+          }, 1000);
+        }
+      },
+    );
+
+    socket.on(
+      "player-ready-discussion",
+      ({ roomId, playerId }: { roomId: string; playerId?: string }) => {
+        if (!discussionReady[roomId]) discussionReady[roomId] = new Set();
+
+        const clientPlayerId = playerId || socket.id;
+        discussionReady[roomId].add(clientPlayerId);
+
+        const totalPlayers = rooms[roomId]?.length || 0;
+
+        if (
+          discussionReady[roomId].size === totalPlayers &&
+          !discussionTimers[roomId]
+        ) {
+          console.log("All players reached discussion page:", roomId);
+
+          discussionTimers[roomId] = { time: 60 };
+
+          discussionTimers[roomId].interval = setInterval(() => {
+            discussionTimers[roomId].time--;
+
+            io.to(roomId).emit(
+              "discussion-timer",
+              discussionTimers[roomId].time,
+            );
+
+            if (discussionTimers[roomId].time <= 0) {
+              clearInterval(discussionTimers[roomId].interval!);
+              delete discussionTimers[roomId];
+              discussionReady[roomId] = new Set<string>();
+
+              if (gameState[roomId]) {
+                if (gameState[roomId].round < 4) {
+                  gameState[roomId].round++;
+                  gameState[roomId].phase = "gameplay";
+                  console.log(
+                    "Discussion ended, moving to next round. Round:",
+                    gameState[roomId].round,
+                  );
+                  io.to(roomId).emit("phase-transition", {
+                    round: gameState[roomId].round,
+                    phase: "gameplay",
+                  });
+                } else {
+                  console.log("Game completed after round 4");
+                  io.to(roomId).emit("game-ended");
+                }
+              }
+            }
+          }, 1000);
+        }
+      },
+    );
 
     socket.on("start-vote-timer", (roomId: string) => {
       const room = rooms[roomId];
@@ -266,100 +283,112 @@ app.prepare().then(() => {
       }, 1000);
     });
 
-    socket.on("vote-category", (data: { roomId: string; category: string }) => {
-      const { roomId, category } = data;
+    socket.on(
+      "vote-category",
+      (data: { roomId: string; category: string; playerId?: string }) => {
+        const { roomId, category, playerId } = data;
 
-      if (!votes[roomId]) votes[roomId] = {};
+        const clientPlayerId = playerId || socket.id;
 
-      for (const cat in votes[roomId]) {
-        votes[roomId][cat] = votes[roomId][cat].filter(
-          (id) => id !== socket.id,
-        );
-      }
+        if (!votes[roomId]) votes[roomId] = {};
 
-      if (!votes[roomId][category]) votes[roomId][category] = [];
-
-      votes[roomId][category].push(socket.id);
-
-      io.to(roomId).emit("vote-update", votes[roomId]);
-    });
-
-    socket.on("join-room", (data: { roomId: string; name: string }) => {
-      const { roomId, name } = data;
-
-      socket.join(roomId);
-
-      if (!rooms[roomId]) rooms[roomId] = [];
-
-      const existingPlayer = rooms[roomId].find((p) => p.name === name);
-
-      if (existingPlayer) {
-        const oldId = existingPlayer.id;
-
-        existingPlayer.id = socket.id;
-
-        if (roles[roomId] && roles[roomId][oldId]) {
-          roles[roomId][socket.id] = roles[roomId][oldId];
-          delete roles[roomId][oldId];
+        for (const cat in votes[roomId]) {
+          votes[roomId][cat] = votes[roomId][cat].filter(
+            (id) => id !== clientPlayerId,
+          );
         }
-      } else {
-        const usedColors = rooms[roomId].map((p) => p.color);
-        const availableColors = playerColors.filter(
-          (color) => !usedColors.includes(color),
+
+        if (!votes[roomId][category]) votes[roomId][category] = [];
+
+        votes[roomId][category].push(clientPlayerId);
+
+        io.to(roomId).emit("vote-update", votes[roomId]);
+      },
+    );
+
+    socket.on(
+      "join-room",
+      (data: { roomId: string; name: string; playerId?: string }) => {
+        const { roomId, name, playerId } = data;
+
+        socket.join(roomId);
+
+        if (!rooms[roomId]) rooms[roomId] = [];
+
+        const clientPlayerId = playerId || socket.id;
+
+        socket.join(clientPlayerId);
+
+        socketToPlayer[socket.id] = clientPlayerId;
+        connectedPlayerIds.add(clientPlayerId);
+
+        const existingPlayer = rooms[roomId].find(
+          (p) => p.id === clientPlayerId,
         );
-        const assignedColor =
-          availableColors.length > 0
-            ? availableColors[0]
-            : playerColors[rooms[roomId].length % playerColors.length];
 
-        rooms[roomId].push({
-          id: socket.id,
-          name,
-          ready: false,
-          color: assignedColor,
-        });
-      }
+        if (existingPlayer) {
+          existingPlayer.name = name;
+          if (!gameState[roomId]) {
+            existingPlayer.ready = false;
+          }
+        } else {
+          const usedColors = rooms[roomId].map((p) => p.color);
+          const availableColors = playerColors.filter(
+            (color) => !usedColors.includes(color),
+          );
+          const assignedColor =
+            availableColors.length > 0
+              ? availableColors[0]
+              : playerColors[rooms[roomId].length % playerColors.length];
 
-      console.log("ROOM:", rooms[roomId]);
-
-      io.to(roomId).emit("room-data", rooms[roomId]);
-
-      if (chatMessages[roomId]) {
-        socket.emit("chat-history", chatMessages[roomId]);
-      }
-
-      if (roles[roomId] && roles[roomId][socket.id]) {
-        socket.emit("your-role", roles[roomId][socket.id]);
-      }
-      if (gameplayReady[roomId]) {
-        gameplayReady[roomId].delete(socket.id);
-      }
-      if (gameState[roomId]) {
-        socket.emit("vote-winner", gameState[roomId].category);
-        socket.emit("vote-timer", gameState[roomId].time);
-        socket.emit("round-update", gameState[roomId].round);
-        socket.emit("phase-update", gameState[roomId].phase);
-        if (docs[roomId]) {
-          socket.emit("yjs-state", {
-            state: Array.from(Y.encodeStateAsUpdate(docs[roomId])),
+          rooms[roomId].push({
+            id: clientPlayerId,
+            name,
+            ready: false,
+            color: assignedColor,
           });
         }
-      }
-      if (gameplayTimers[roomId]) {
-        socket.emit("gameplay-timer", gameplayTimers[roomId].time);
-      }
-    });
 
-    socket.on("player-ready", (data: { roomId: string }) => {
-      const { roomId } = data;
+        console.log("ROOM:", rooms[roomId]);
 
-      console.log("READY CLICKED:", socket.id);
+        io.to(roomId).emit("room-data", rooms[roomId]);
+
+        if (chatMessages[roomId]) {
+          socket.emit("chat-history", chatMessages[roomId]);
+        }
+
+        if (roles[roomId] && roles[roomId][clientPlayerId]) {
+          socket.emit("your-role", roles[roomId][clientPlayerId]);
+        }
+        if (gameState[roomId]) {
+          socket.emit("vote-winner", gameState[roomId].category);
+          socket.emit("vote-timer", gameState[roomId].time);
+          socket.emit("round-update", gameState[roomId].round);
+          socket.emit("phase-update", gameState[roomId].phase);
+          if (docs[roomId]) {
+            socket.emit("yjs-state", {
+              state: Array.from(Y.encodeStateAsUpdate(docs[roomId])),
+            });
+          }
+        }
+        if (gameplayTimers[roomId]) {
+          socket.emit("gameplay-timer", gameplayTimers[roomId].time);
+        }
+      },
+    );
+
+    socket.on("player-ready", (data: { roomId: string; playerId?: string }) => {
+      const { roomId, playerId } = data;
+
+      const clientPlayerId = playerId || socket.id;
+
+      console.log("READY CLICKED:", clientPlayerId);
       console.log("ROOM:", rooms[roomId]);
 
       const room = rooms[roomId];
       if (!room) return;
 
-      const player = room.find((p) => p.id === socket.id);
+      const player = room.find((p) => p.id === clientPlayerId);
       if (!player) return;
 
       player.ready = true;
@@ -388,13 +417,15 @@ app.prepare().then(() => {
 
     socket.on(
       "send-chat-message",
-      (data: { roomId: string; message: string }) => {
-        const { roomId, message } = data;
+      (data: { roomId: string; message: string; playerId?: string }) => {
+        const { roomId, message, playerId } = data;
+
+        const clientPlayerId = playerId || socket.id;
 
         const room = rooms[roomId];
         if (!room) return;
 
-        const player = room.find((p) => p.id === socket.id);
+        const player = room.find((p) => p.id === clientPlayerId);
         if (!player) return;
 
         const trimmedMessage = message.trim();
@@ -402,7 +433,7 @@ app.prepare().then(() => {
 
         const chatMessage: ChatMessage = {
           id: crypto.randomUUID(),
-          playerId: socket.id,
+          playerId: clientPlayerId,
           playerName: player.name,
           message: trimmedMessage,
           timestamp: Date.now(),
@@ -424,15 +455,25 @@ app.prepare().then(() => {
     );
 
     socket.on("disconnect", () => {
+      const playerId = socketToPlayer[socket.id] || socket.id;
+
+      delete socketToPlayer[socket.id];
+      connectedPlayerIds.delete(playerId);
+
       setTimeout(() => {
+        const playerRejoined = connectedPlayerIds.has(playerId);
+        if (playerRejoined) return;
+
         for (const roomId in rooms) {
-          const stillExists = rooms[roomId].some((p) => p.id === socket.id);
+          const stillExists = rooms[roomId].some((p) => p.id === playerId);
           if (!stillExists) continue;
 
-          rooms[roomId] = rooms[roomId].filter((p) => p.id !== socket.id);
+          if (gameState[roomId]) continue;
+
+          rooms[roomId] = rooms[roomId].filter((p) => p.id !== playerId);
           io.to(roomId).emit("room-data", rooms[roomId]);
         }
-      }, 2000);
+      }, 500);
     });
   });
 

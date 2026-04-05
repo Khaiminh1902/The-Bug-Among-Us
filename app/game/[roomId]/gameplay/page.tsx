@@ -168,11 +168,12 @@ export default function Page() {
     socket.emit("join-room", {
       roomId,
       name: localStorage.getItem("playerName"),
+      playerId: localStorage.getItem("playerId"),
     });
 
     socket.emit("get-yjs-state", { roomId });
 
-    socket.emit("player-ready-gameplay", { roomId });
+    socket.emit("player-ready-gameplay", { roomId, playerId: localStorage.getItem("playerId") });
 
     return () => {
       socket.disconnect();
