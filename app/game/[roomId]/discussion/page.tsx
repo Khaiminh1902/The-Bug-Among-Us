@@ -327,7 +327,9 @@ export default function Page() {
               <>
                 <h1 className="text-3xl font-bold mb-4 tracking-wide flex flex-col">
                   <div>
-                    {players.find((p) => p.id === voteResult)?.name}{" "}
+                    <span className="text-red-500">
+                      {players.find((p) => p.id === voteResult)?.name}
+                    </span>{" "}
                     {eliminatedIsSabotager === true
                       ? "was the Sabotager!"
                       : eliminatedIsSabotager === false
