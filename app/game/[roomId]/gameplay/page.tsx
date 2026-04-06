@@ -41,63 +41,44 @@ export default function Page() {
   const bindingRef = useRef<any>(null);
   const [ending, setEnding] = useState(false);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
+  const initYjs = async (socket: Socket) => {
+    const Y = await import("yjs");
+    const { MonacoBinding } = await import("y-monaco");
+    const { Awareness } = await import("y-protocols/awareness");
 
-    const init = async () => {
-      const Y = await import("yjs");
-      const { MonacoBinding } = await import("y-monaco");
-      const { Awareness } = await import("y-protocols/awareness");
+    const ydoc = new Y.Doc();
+    ydocRef.current = ydoc;
 
-      const ydoc = new Y.Doc();
-      ydocRef.current = ydoc;
+    const awareness = new Awareness(ydoc);
+    awarenessRef.current = awareness;
 
-      const awareness = new Awareness(ydoc);
-      awarenessRef.current = awareness;
+    const yText = ydoc.getText("monaco");
 
-      const yText = ydoc.getText("monaco");
+    socket.on("yjs-update", (update: number[]) => {
+      const uint8 = new Uint8Array(update);
+      Y.applyUpdate(ydoc, uint8);
+    });
 
-      const waitForSocket = () =>
-        new Promise<Socket>((resolve) => {
-          const check = () => {
-            if (socketRef.current) return resolve(socketRef.current);
-            setTimeout(check, 50);
-          };
-          check();
-        });
-
-      const socket = await waitForSocket();
-
-      socket.on("yjs-update", (update: number[]) => {
-        const uint8 = new Uint8Array(update);
-        Y.applyUpdate(ydoc, uint8);
+    ydoc.on("update", (update: Uint8Array) => {
+      socket.emit("yjs-update", {
+        roomId,
+        update: Array.from(update),
       });
+    });
 
-      ydoc.on("update", (update: Uint8Array) => {
-        socket.emit("yjs-update", {
-          roomId,
-          update: Array.from(update),
-        });
-      });
-
-      bindingRef.current = (editor: any) => {
-        new MonacoBinding(
-          yText,
-          editor.getModel(),
-          new Set([editor]),
-          awareness,
-        );
-      };
-
-      setReady(true);
+    bindingRef.current = (editor: any) => {
+      new MonacoBinding(
+        yText,
+        editor.getModel(),
+        new Set([editor]),
+        awareness,
+      );
     };
 
-    init();
+    setReady(true);
 
-    return () => {
-      ydocRef.current?.destroy();
-    };
-  }, [roomId]);
+    socket.emit("get-yjs-state", { roomId });
+  };
 
   useEffect(() => {
     if (socketRef.current) return;
@@ -121,11 +102,18 @@ export default function Page() {
     });
 
     socket.on("yjs-state", async (data: { state: number[] }) => {
-      if (data.state && data.state.length > 0 && ydocRef.current) {
-        const Y = await import("yjs");
-        const uint8 = new Uint8Array(data.state);
-        Y.applyUpdate(ydocRef.current, uint8);
-      }
+      let attempts = 0;
+      const applyState = async () => {
+        attempts++;
+        if (data.state && data.state.length > 0 && ydocRef.current) {
+          const Y = await import("yjs");
+          const uint8 = new Uint8Array(data.state);
+          Y.applyUpdate(ydocRef.current, uint8);
+        } else if (data.state && data.state.length > 0 && attempts < 10) {
+          setTimeout(applyState, 100);
+        }
+      };
+      applyState();
     });
 
     socket.on("room-data", (data: Player[]) => {
@@ -171,7 +159,7 @@ export default function Page() {
       playerId: localStorage.getItem("playerId"),
     });
 
-    socket.emit("get-yjs-state", { roomId });
+    initYjs(socket);
 
     socket.emit("player-ready-gameplay", { roomId, playerId: localStorage.getItem("playerId") });
 

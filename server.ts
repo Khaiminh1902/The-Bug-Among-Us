@@ -2,6 +2,7 @@ import { createServer } from "http";
 import next from "next";
 import { Server } from "socket.io";
 import * as Y from "yjs";
+import { codeTemplates } from "./data/challenges/index";
 
 const dev = true;
 const app = next({ dev });
@@ -373,6 +374,11 @@ app.prepare().then(() => {
             round: 1,
             phase: "gameplay",
           };
+
+          if (!docs[roomId]) docs[roomId] = new Y.Doc();
+          const yText = docs[roomId].getText("monaco");
+          yText.delete(0, yText.length);
+          yText.insert(0, codeTemplates[winner] || "// Start coding...");
 
           io.to(roomId).emit("vote-winner", winner);
         }
