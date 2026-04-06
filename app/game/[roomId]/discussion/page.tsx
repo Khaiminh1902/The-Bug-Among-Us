@@ -42,12 +42,15 @@ export default function Page() {
   >(null);
 
   const vote = (targetId: string) => {
+    const currentPlayerId = localStorage.getItem("playerId");
+    if (targetId === currentPlayerId) return;
+
     console.log("VOTING FOR:", targetId);
 
     socketRef.current?.emit("vote-player", {
       roomId,
       targetId,
-      playerId: localStorage.getItem("playerId"),
+      playerId: currentPlayerId,
     });
   };
 
@@ -196,7 +199,7 @@ export default function Page() {
 
         <div className="text-right">
           <div className="p-1 w-fit ml-auto flex items-center gap-1">
-            {players.length} Players
+            {players.length} Alive
           </div>
         </div>
       </div>
@@ -217,14 +220,22 @@ export default function Page() {
                 (v) => v === player.id,
               ).length;
 
+              const isCurrentPlayer =
+                player.id === localStorage.getItem("playerId");
+
               return (
                 <div
                   key={player.id}
                   onClick={() => {
+                    if (isCurrentPlayer) return;
                     console.log("CLICKED", player.id);
                     vote(player.id);
                   }}
-                  className="flex items-center justify-between bg-white border-2 mb-4 h-10 p-2 tracking-wide cursor-pointer hover:bg-gray-100"
+                  className={`flex items-center justify-between border-2 mb-4 h-10 p-2 tracking-wide ${
+                    isCurrentPlayer
+                      ? "bg-gray-200 cursor-not-allowed opacity-50"
+                      : "bg-white cursor-pointer hover:bg-gray-100"
+                  }`}
                 >
                   <div className="flex items-center">
                     <div
@@ -317,9 +328,9 @@ export default function Page() {
                 <h1 className="text-3xl font-bold mb-4">
                   {players.find((p) => p.id === voteResult)?.name}{" "}
                   {eliminatedIsSabotager === true
-                    ? "was the SABOTAGER!"
+                    ? "was the Sabotager!"
                     : eliminatedIsSabotager === false
-                      ? "was not the SABOTAGER"
+                      ? "was not the Sabotager"
                       : "was eliminated"}
                 </h1>
               </>
