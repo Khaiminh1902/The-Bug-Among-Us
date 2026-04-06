@@ -24,6 +24,7 @@ export default function Page() {
 
   const socketRef = useRef<Socket | null>(null);
   const [countdown, setCountdown] = useState<number | null>(null);
+  const [isStarting, setIsStarting] = useState(false);
 
   useEffect(() => {
     const name = localStorage.getItem("playerName");
@@ -44,7 +45,12 @@ export default function Page() {
     });
 
     socketRef.current.on("countdown", (time: number) => {
-      setCountdown(time);
+      if (time === 0) {
+        setCountdown(null);
+        setIsStarting(true);
+      } else {
+        setCountdown(time);
+      }
     });
 
     socketRef.current.on("start-game", () => {
@@ -126,15 +132,23 @@ export default function Page() {
             ))}
           </div>
         </div>
-        {countdown !== null && (
+        {countdown !== null && !isStarting && (
           <div className="text-2xl font-bold text-white">
             Game starts in {countdown}...
+          </div>
+        )}
+        {isStarting && (
+          <div className="text-2xl font-bold text-green-400 animate-pulse mt-1">
+            Starting...
           </div>
         )}
         <button
           onClick={() => {
             console.log("clicked ready");
-            socketRef.current?.emit("player-ready", { roomId, playerId: localStorage.getItem("playerId") });
+            socketRef.current?.emit("player-ready", {
+              roomId,
+              playerId: localStorage.getItem("playerId"),
+            });
           }}
           className="bg-green-400 p-1 pl-4 pr-4 mt-5 border hover:bg-green-300 cursor-pointer"
         >

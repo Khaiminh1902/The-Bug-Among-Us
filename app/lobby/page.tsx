@@ -9,6 +9,7 @@ const Page = () => {
 
   const [action, setAction] = useState<"create" | "join" | null>(null);
   const [showNameError, setShowNameError] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   const router = useRouter();
 
@@ -16,14 +17,16 @@ const Page = () => {
     setAction(null);
     setName("");
     setShowNameError(false);
+    setIsLoading(false);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!name) {
       setShowNameError(true);
       return;
     }
 
+    setIsLoading(true);
     localStorage.setItem("playerName", name);
 
     if (action === "create") {
@@ -124,9 +127,14 @@ const Page = () => {
 
               <button
                 onClick={handleSubmit}
-                className="bg-blue-400 text-white p-2 hover:bg-blue-300 cursor-pointer"
+                disabled={isLoading}
+                className="bg-blue-400 text-white p-2 hover:bg-blue-300 cursor-pointer disabled:bg-blue-300 flex items-center justify-center min-w-[120px]"
               >
-                Continue
+                {isLoading ? (
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  "Continue"
+                )}
               </button>
             </div>
           </div>
