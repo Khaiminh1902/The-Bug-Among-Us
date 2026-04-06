@@ -207,7 +207,7 @@ export default function Page() {
       <div className="flex-1 flex items-center justify-center gap-10">
         <div className="text-center">
           <div>
-            <h1 className="text-3xl font-bold mb-1 tracking-widest">
+            <h1 className="text-3xl font-bold mb-1 tracking-wider">
               WHO IS THE SABOTAGER?
             </h1>
             <p className="text-sm mb-5">
@@ -233,7 +233,7 @@ export default function Page() {
                   }}
                   className={`flex items-center justify-between border-2 mb-4 h-10 p-2 tracking-wide ${
                     isCurrentPlayer
-                      ? "bg-gray-200 cursor-not-allowed opacity-50"
+                      ? "bg-white cursor-not-allowed opacity-60"
                       : "bg-white cursor-pointer hover:bg-gray-100"
                   }`}
                 >
@@ -325,7 +325,7 @@ export default function Page() {
           <div className="text-center">
             {voteResult ? (
               <>
-                <h1 className="text-3xl font-bold mb-4">
+                <h1 className="text-3xl font-bold mb-4 tracking-wider">
                   {players.find((p) => p.id === voteResult)?.name}{" "}
                   {eliminatedIsSabotager === true
                     ? "was the Sabotager!"
@@ -335,7 +335,9 @@ export default function Page() {
                 </h1>
               </>
             ) : (
-              <h1 className="text-3xl font-bold">No one was eliminated</h1>
+              <h1 className="text-3xl font-bold tracking-wider">
+                No one was eliminated
+              </h1>
             )}
           </div>
         </div>
