@@ -325,18 +325,26 @@ export default function Page() {
           <div className="text-center">
             {voteResult ? (
               <>
-                <h1 className="text-3xl font-bold mb-4 tracking-wider">
-                  {players.find((p) => p.id === voteResult)?.name}{" "}
-                  {eliminatedIsSabotager === true
-                    ? "was the Sabotager!"
-                    : eliminatedIsSabotager === false
-                      ? "was not the Sabotager"
-                      : "was eliminated"}
+                <h1 className="text-3xl font-bold mb-4 tracking-wide flex flex-col">
+                  <div>
+                    {players.find((p) => p.id === voteResult)?.name}{" "}
+                    {eliminatedIsSabotager === true
+                      ? "was the Sabotager!"
+                      : eliminatedIsSabotager === false
+                        ? "was not the Sabotager"
+                        : "was eliminated"}
+                  </div>
+                  <span className="text-xs mt-2 text-gray-400">
+                    Next round starting...
+                  </span>
                 </h1>
               </>
             ) : (
-              <h1 className="text-3xl font-bold tracking-wider">
+              <h1 className="text-3xl font-bold tracking-wider flex flex-col">
                 No one was eliminated
+                <span className="text-xs mt-2 text-gray-400">
+                  Next round starting...
+                </span>
               </h1>
             )}
           </div>
