@@ -37,6 +37,9 @@ export default function Page() {
   const [votes, setVotes] = useState<{ [key: string]: string }>({});
   const [voteResult, setVoteResult] = useState<string | null>(null);
   const [showResult, setShowResult] = useState(false);
+  const [eliminatedIsSabotager, setEliminatedIsSabotager] = useState<
+    boolean | null
+  >(null);
 
   const vote = (targetId: string) => {
     console.log("VOTING FOR:", targetId);
@@ -83,8 +86,9 @@ export default function Page() {
       setVotes(data);
     });
 
-    socket.on("vote-result", ({ eliminated }) => {
+    socket.on("vote-result", ({ eliminated, isSabotager }) => {
       setVoteResult(eliminated);
+      setEliminatedIsSabotager(isSabotager ?? null);
       setShowResult(true);
     });
 
@@ -93,6 +97,7 @@ export default function Page() {
       ({ phase }: { round: number; phase: string }) => {
         setShowResult(false);
         setVoteResult(null);
+        setEliminatedIsSabotager(null);
 
         if (phase === "gameplay") {
           setEnding(true);
@@ -310,12 +315,13 @@ export default function Page() {
             {voteResult ? (
               <>
                 <h1 className="text-3xl font-bold mb-4">
-                  {players.find((p) => p.id === voteResult)?.name} was
-                  eliminated
+                  {players.find((p) => p.id === voteResult)?.name}{" "}
+                  {eliminatedIsSabotager === true
+                    ? "was the SABOTAGER!"
+                    : eliminatedIsSabotager === false
+                      ? "was not the SABOTAGER"
+                      : "was eliminated"}
                 </h1>
-                <p className="text-sm opacity-80">
-                  They might be the sabotager...
-                </p>
               </>
             ) : (
               <h1 className="text-3xl font-bold">No one was eliminated</h1>

@@ -255,7 +255,8 @@ app.prepare().then(() => {
                 eliminated = null;
               }
 
-              io.to(roomId).emit("vote-result", { eliminated });
+              const eliminatedRole = eliminated ? roles[roomId]?.[eliminated] : null;
+              io.to(roomId).emit("vote-result", { eliminated, isSabotager: eliminatedRole === "sabotager" });
 
               setTimeout(() => {
                 if (eliminated) {
