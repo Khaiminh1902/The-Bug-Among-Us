@@ -67,12 +67,7 @@ export default function Page() {
     });
 
     bindingRef.current = (editor: any) => {
-      new MonacoBinding(
-        yText,
-        editor.getModel(),
-        new Set([editor]),
-        awareness,
-      );
+      new MonacoBinding(yText, editor.getModel(), new Set([editor]), awareness);
     };
 
     setReady(true);
@@ -161,12 +156,16 @@ export default function Page() {
 
     initYjs(socket);
 
-    socket.emit("player-ready-gameplay", { roomId, playerId: localStorage.getItem("playerId") });
+    socket.emit("player-ready-gameplay", {
+      roomId,
+      playerId: localStorage.getItem("playerId"),
+    });
 
     return () => {
       socket.disconnect();
       socketRef.current = null;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomId, router]);
 
   return (

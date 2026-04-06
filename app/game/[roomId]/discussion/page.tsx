@@ -45,8 +45,6 @@ export default function Page() {
     const currentPlayerId = localStorage.getItem("playerId");
     if (targetId === currentPlayerId) return;
 
-    console.log("VOTING FOR:", targetId);
-
     socketRef.current?.emit("vote-player", {
       roomId,
       targetId,

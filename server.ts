@@ -2,7 +2,7 @@ import { createServer } from "http";
 import next from "next";
 import { Server } from "socket.io";
 import * as Y from "yjs";
-import { codeTemplates } from "./data/challenges/index";
+import { codeTemplates } from "./data/challenges/index.ts";
 
 const dev = true;
 const app = next({ dev });
@@ -256,8 +256,13 @@ app.prepare().then(() => {
                 eliminated = null;
               }
 
-              const eliminatedRole = eliminated ? roles[roomId]?.[eliminated] : null;
-              io.to(roomId).emit("vote-result", { eliminated, isSabotager: eliminatedRole === "sabotager" });
+              const eliminatedRole = eliminated
+                ? roles[roomId]?.[eliminated]
+                : null;
+              io.to(roomId).emit("vote-result", {
+                eliminated,
+                isSabotager: eliminatedRole === "sabotager",
+              });
 
               setTimeout(() => {
                 if (eliminated) {

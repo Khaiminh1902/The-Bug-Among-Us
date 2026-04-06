@@ -128,7 +128,7 @@ const Page = () => {
               <button
                 onClick={handleSubmit}
                 disabled={isLoading}
-                className="bg-blue-400 text-white p-2 hover:bg-blue-300 cursor-pointer disabled:bg-blue-300 flex items-center justify-center min-w-[120px]"
+                className="bg-blue-400 text-white p-2 hover:bg-blue-300 cursor-pointer disabled:bg-blue-300 flex items-center justify-center min-w-30"
               >
                 {isLoading ? (
                   <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />

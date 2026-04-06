@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "The Bug Among Us",
   description:
-    "Fix the bug as soon as possible and spot the one sabotaging the code.",
+    "Among Us for CodersFix the bug as soon as possible and spot the one sabotaging the code",
 };
 
 export default function RootLayout({
