@@ -22,6 +22,10 @@ const discussionTimers: {
   };
 } = {};
 
+const eliminatedPlayers: {
+  [roomId: string]: Set<string>;
+} = {};
+
 const gameState: {
   [roomId: string]: {
     category: string;
@@ -47,6 +51,12 @@ type Player = {
 type Rooms = {
   [roomId: string]: Player[];
 };
+
+const playerVotes: {
+  [roomId: string]: {
+    [playerId: string]: string;
+  };
+} = {};
 
 type Votes = {
   [roomId: string]: {
@@ -118,6 +128,22 @@ app.prepare().then(() => {
 
       socket.to(roomId).emit("yjs-update", update);
     });
+
+    socket.on(
+      "vote-player",
+      (data: { roomId: string; targetId: string; playerId?: string }) => {
+        console.log("SERVER RECEIVED VOTE:", data);
+        const { roomId, targetId, playerId } = data;
+
+        const voterId = playerId || socketToPlayer[socket.id];
+
+        if (!playerVotes[roomId]) playerVotes[roomId] = {};
+
+        playerVotes[roomId][voterId] = targetId;
+
+        io.to(roomId).emit("player-vote-update", playerVotes[roomId]);
+      },
+    );
 
     socket.on("get-yjs-state", ({ roomId }) => {
       if (docs[roomId]) {
@@ -204,23 +230,92 @@ app.prepare().then(() => {
               delete discussionTimers[roomId];
               discussionReady[roomId] = new Set<string>();
 
-              if (gameState[roomId]) {
-                if (gameState[roomId].round < 4) {
-                  gameState[roomId].round++;
-                  gameState[roomId].phase = "gameplay";
-                  console.log(
-                    "Discussion ended, moving to next round. Round:",
-                    gameState[roomId].round,
-                  );
-                  io.to(roomId).emit("phase-transition", {
-                    round: gameState[roomId].round,
-                    phase: "gameplay",
-                  });
-                } else {
-                  console.log("Game completed after round 4");
-                  io.to(roomId).emit("game-ended");
+              const roomVotes = playerVotes[roomId] || {};
+              const count: { [key: string]: number } = {};
+
+              Object.values(roomVotes).forEach((target) => {
+                count[target] = (count[target] || 0) + 1;
+              });
+
+              let max = 0;
+              let eliminated: string | null = null;
+              let isTie = false;
+
+              for (const target in count) {
+                if (count[target] > max) {
+                  max = count[target];
+                  eliminated = target;
+                  isTie = false;
+                } else if (count[target] === max) {
+                  isTie = true;
                 }
               }
+
+              if (isTie || eliminated === "skip") {
+                eliminated = null;
+              }
+
+              io.to(roomId).emit("vote-result", { eliminated });
+
+              setTimeout(() => {
+                if (eliminated) {
+                  const id = eliminated;
+
+                  if (!eliminatedPlayers[roomId])
+                    eliminatedPlayers[roomId] = new Set();
+                  eliminatedPlayers[roomId].add(id);
+
+                  rooms[roomId] = rooms[roomId].filter((p) => p.id !== id);
+
+                  gameplayReady[roomId]?.delete(id);
+                  discussionReady[roomId]?.delete(id);
+
+                  if (votes[roomId]) {
+                    for (const cat in votes[roomId]) {
+                      votes[roomId][cat] = votes[roomId][cat].filter(
+                        (pid) => pid !== id,
+                      );
+                    }
+                  }
+
+                  const socketId = Object.keys(socketToPlayer).find(
+                    (key) => socketToPlayer[key] === id,
+                  );
+
+                  io.to(id).emit("kicked");
+
+                  if (socketId) {
+                    setTimeout(() => {
+                      io.sockets.sockets.get(socketId)?.disconnect(true);
+                      delete socketToPlayer[socketId];
+                    }, 500);
+                  }
+
+                  io.to(roomId).emit("room-data", rooms[roomId]);
+                }
+
+                playerVotes[roomId] = {};
+
+                if (gameState[roomId]) {
+                  if (gameState[roomId].round < 4) {
+                    gameState[roomId].round++;
+                    gameState[roomId].phase = "gameplay";
+
+                    io.to(roomId).emit("phase-transition", {
+                      round: gameState[roomId].round,
+                      phase: "gameplay",
+                    });
+                  } else {
+                    io.to(roomId).emit("game-ended");
+                    delete eliminatedPlayers[roomId];
+                    delete gameplayTimers[roomId];
+                    delete discussionTimers[roomId];
+                    delete votes[roomId];
+                    delete gameState[roomId];
+                    delete rooms[roomId];
+                  }
+                }
+              }, 3000);
             }
           }, 1000);
         }
@@ -316,6 +411,16 @@ app.prepare().then(() => {
         if (!rooms[roomId]) rooms[roomId] = [];
 
         const clientPlayerId = playerId || socket.id;
+
+        if (eliminatedPlayers[roomId]?.has(clientPlayerId)) {
+          console.log(
+            "Blocked eliminated player from rejoining:",
+            clientPlayerId,
+          );
+          socket.emit("kicked");
+          socket.disconnect(true);
+          return;
+        }
 
         socket.join(clientPlayerId);
 

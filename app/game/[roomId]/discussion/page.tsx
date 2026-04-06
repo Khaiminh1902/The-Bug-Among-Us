@@ -34,11 +34,24 @@ export default function Page() {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [messageInput, setMessageInput] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [votes, setVotes] = useState<{ [key: string]: string }>({});
+  const [voteResult, setVoteResult] = useState<string | null>(null);
+  const [showResult, setShowResult] = useState(false);
+
+  const vote = (targetId: string) => {
+    console.log("VOTING FOR:", targetId);
+
+    socketRef.current?.emit("vote-player", {
+      roomId,
+      targetId,
+      playerId: localStorage.getItem("playerId"),
+    });
+  };
 
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    const socket = io();
+    const socket = io("", { reconnection: false });
     socketRef.current = socket;
 
     let playerId = localStorage.getItem("playerId");
@@ -66,9 +79,21 @@ export default function Page() {
       setTime(t);
     });
 
+    socket.on("player-vote-update", (data) => {
+      setVotes(data);
+    });
+
+    socket.on("vote-result", ({ eliminated }) => {
+      setVoteResult(eliminated);
+      setShowResult(true);
+    });
+
     socket.on(
       "phase-transition",
       ({ phase }: { round: number; phase: string }) => {
+        setShowResult(false);
+        setVoteResult(null);
+
         if (phase === "gameplay") {
           setEnding(true);
           setTimeout(() => {
@@ -101,6 +126,15 @@ export default function Page() {
 
     socket.on("chat-message", (message: ChatMessage) => {
       setChatMessages((prev) => [...prev, message]);
+    });
+
+    socket.on("kicked", () => {
+      console.log("Received kicked event");
+      setEnding(true);
+      setTimeout(() => {
+        hasRedirected.current = true;
+        window.location.href = "/";
+      }, 800);
     });
 
     socket.emit("player-ready-discussion", { roomId });
@@ -173,21 +207,39 @@ export default function Page() {
             </p>
           </div>
           <div className="">
-            {players.map((player) => (
-              <div
-                key={player.id}
-                className="flex items-center bg-white border-2 mb-4 h-10 p-2 tracking-wide cursor-pointer hover:bg-gray-100"
-              >
+            {players.map((player) => {
+              const voteCount = Object.values(votes).filter(
+                (v) => v === player.id,
+              ).length;
+
+              return (
                 <div
-                  className="w-4 h-4 border-2 mr-2"
-                  style={{ backgroundColor: player.color }}
-                ></div>
-                <span className="font-semibold">{player.name}</span>
-              </div>
-            ))}
+                  key={player.id}
+                  onClick={() => {
+                    console.log("CLICKED", player.id);
+                    vote(player.id);
+                  }}
+                  className="flex items-center justify-between bg-white border-2 mb-4 h-10 p-2 tracking-wide cursor-pointer hover:bg-gray-100"
+                >
+                  <div className="flex items-center">
+                    <div
+                      className="w-4 h-4 border-2 mr-2"
+                      style={{ backgroundColor: player.color }}
+                    ></div>
+                    <span className="font-semibold">{player.name}</span>
+                  </div>
+
+                  <span className="text-xs">{voteCount} votes</span>
+                </div>
+              );
+            })}
           </div>
-          <div className="bg-green-200 w-full h-10 flex items-center justify-center border-2 hover:bg-green-100 cursor-pointer">
-            Skip Vote
+          <div
+            onClick={() => vote("skip")}
+            className="bg-green-200 w-full h-10 flex items-center justify-center border-2 hover:bg-green-100 cursor-pointer"
+          >
+            Skip Vote ({Object.values(votes).filter((v) => v === "skip").length}
+            )
           </div>
         </div>
         <div className="bg-blue-100 h-96 w-[20%] border-2 flex flex-col overflow-hidden">
@@ -244,6 +296,32 @@ export default function Page() {
           className="fixed inset-0 bg-black z-50"
           style={{ opacity: 1, transition: "opacity 0.8s" }}
         />
+      )}
+      {ending && (
+        <div
+          className="fixed inset-0 bg-black z-50"
+          style={{ opacity: 1, transition: "opacity 0.8s" }}
+        />
+      )}
+
+      {showResult && (
+        <div className="fixed inset-0 bg-black bg-opacity-80 z-60 flex items-center justify-center text-white">
+          <div className="text-center">
+            {voteResult ? (
+              <>
+                <h1 className="text-3xl font-bold mb-4">
+                  {players.find((p) => p.id === voteResult)?.name} was
+                  eliminated
+                </h1>
+                <p className="text-sm opacity-80">
+                  They might be the sabotager...
+                </p>
+              </>
+            ) : (
+              <h1 className="text-3xl font-bold">No one was eliminated</h1>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );
