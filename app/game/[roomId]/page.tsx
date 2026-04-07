@@ -2,11 +2,11 @@
 
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { io } from "socket.io-client";
 import { FaCopy } from "react-icons/fa";
 import { Socket } from "socket.io-client";
 import { IoPeopleOutline } from "react-icons/io5";
 import { useRef } from "react";
-import socket from "@/lib/socket";
 
 type Player = {
   id: string;
@@ -36,7 +36,7 @@ export default function Page() {
       localStorage.setItem("playerId", playerId);
     }
 
-    socketRef.current = socket;
+    socketRef.current = io();
 
     socketRef.current.emit("join-room", { roomId, name, playerId });
 

@@ -55,9 +55,7 @@ export default function Page() {
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    const socket = io(process.env.NEXT_PUBLIC_SOCKET_URL, {
-      reconnection: false,
-    });
+    const socket = io("", { reconnection: false });
     socketRef.current = socket;
 
     let playerId = localStorage.getItem("playerId");

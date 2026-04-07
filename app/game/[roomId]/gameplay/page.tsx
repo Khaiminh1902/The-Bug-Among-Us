@@ -4,14 +4,12 @@
 import type * as Y from "yjs";
 import type { Awareness } from "y-protocols/awareness";
 import { useEffect, useState, useRef } from "react";
-import { Socket } from "socket.io-client";
+import { io, Socket } from "socket.io-client";
 import { useParams } from "next/navigation";
 import { IoPeopleOutline, IoCheckmark, IoClose } from "react-icons/io5";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import socket from "@/lib/socket";
-
 import {
   getTasksForCategory,
   getSabotageTasksForCategory,
@@ -87,6 +85,7 @@ export default function Page() {
   useEffect(() => {
     if (socketRef.current) return;
 
+    const socket = io();
     socketRef.current = socket;
 
     let playerId = localStorage.getItem("playerId");
