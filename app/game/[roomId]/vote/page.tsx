@@ -4,6 +4,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams } from "next/navigation";
 import { io, Socket } from "socket.io-client";
+import socket from "@/lib/socket";
 
 type Votes = Record<string, string[]>;
 
@@ -40,7 +41,6 @@ export default function VotePage() {
       localStorage.setItem("playerId", playerId);
     }
 
-    const socket = io();
     socketRef.current = socket;
 
     socket.emit("join-room", {
