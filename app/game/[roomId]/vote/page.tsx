@@ -40,7 +40,7 @@ export default function VotePage() {
       localStorage.setItem("playerId", playerId);
     }
 
-    const socket = io();
+    const socket = io(process.env.NEXT_PUBLIC_SOCKET_URL);
     socketRef.current = socket;
 
     socket.emit("join-room", {

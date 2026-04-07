@@ -85,7 +85,7 @@ export default function Page() {
   useEffect(() => {
     if (socketRef.current) return;
 
-    const socket = io();
+    const socket = io(process.env.NEXT_PUBLIC_SOCKET_URL);
     socketRef.current = socket;
 
     let playerId = localStorage.getItem("playerId");

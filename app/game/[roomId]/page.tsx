@@ -36,7 +36,7 @@ export default function Page() {
       localStorage.setItem("playerId", playerId);
     }
 
-    socketRef.current = io();
+    socketRef.current = io(process.env.NEXT_PUBLIC_SOCKET_URL);
 
     socketRef.current.emit("join-room", { roomId, name, playerId });
 
