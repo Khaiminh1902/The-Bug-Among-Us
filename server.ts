@@ -3,6 +3,7 @@ import next from "next";
 import { Server } from "socket.io";
 import * as Y from "yjs";
 import { codeTemplates } from "./data/challenges/index.ts";
+const PORT = process.env.PORT || 3000;
 
 const dev = true;
 const app = next({ dev });
@@ -419,7 +420,11 @@ app.prepare().then(() => {
 
     socket.on(
       "update-tasks",
-      (data: { roomId: string; playerId: string; completedTasks: number[] }) => {
+      (data: {
+        roomId: string;
+        playerId: string;
+        completedTasks: number[];
+      }) => {
         const { roomId, playerId, completedTasks } = data;
         if (gameState[roomId] && gameState[roomId].playerTasks) {
           gameState[roomId].playerTasks[playerId] = completedTasks;
@@ -614,7 +619,7 @@ app.prepare().then(() => {
     });
   });
 
-  httpServer.listen(3000, () => {
-    console.log("Server running");
+  httpServer.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
   });
 });

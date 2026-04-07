@@ -202,37 +202,7 @@ export default function Page() {
       playerId: localStorage.getItem("playerId") || "",
       completedTasks: newCompleted,
     });
-  };
-
-  const checkBugFixes = (code: string) => {
-    const newlyDetected: number[] = [];
-
-    currentTasks.forEach((task) => {
-      if (completedTasks.includes(task.bugId)) return;
-
-      const fixPattern = task.fixDetection.toLowerCase();
-      const codeLower = code.toLowerCase();
-
-      const isFixed = fixPattern.split(" and ").every((pattern) => {
-        const trimmed = pattern.trim();
-        return codeLower.includes(trimmed);
-      });
-
-      if (isFixed) {
-        newlyDetected.push(task.bugId);
-      }
-    });
-
-    if (newlyDetected.length > 0) {
-      const newCompleted = [...completedTasks, ...newlyDetected];
-      setCompletedTasks(newCompleted);
-      socketRef.current?.emit("update-tasks", {
-        roomId,
-        playerId: localStorage.getItem("playerId") || "",
-        completedTasks: newCompleted,
-      });
-    }
-  };
+};
 
   return (
     <div className="font-pixel flex flex-col h-screen bg-orange-100">
@@ -385,9 +355,6 @@ export default function Page() {
 
                   editor.onDidChangeModelContent(() => {
                     const code = editor.getValue();
-                    if (roleRef.current !== "sabotager") {
-                      checkBugFixes(code);
-                    }
                   });
                 }}
               />
