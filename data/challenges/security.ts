@@ -1,17 +1,10 @@
 export const code = `
 function sanitizeInput(input) {
-  // 🔴 DEBUG HERE (Bug 1)
-  // What if input is null, undefined, or not a string?
-
   let sanitized = input
 
-  // 🔴 DEBUG HERE (Bug 2)
-  // Only removes first occurrence of <script> tag
   sanitized = sanitized.replace("<script>", "")
   sanitized = sanitized.replace("</script>", "")
 
-  // 🔴 DEBUG HERE (Bug 3)
-  // Incorrect escaping (order matters)
   sanitized = sanitized.replace("<", "&lt;")
   sanitized = sanitized.replace(">", "&gt;")
 
@@ -19,14 +12,10 @@ function sanitizeInput(input) {
 }
 
 function containsScript(input) {
-  // 🔴 DEBUG HERE (Bug 4)
-  // Case sensitivity issue (SCRIPT vs script)
   return input.includes("<script>")
 }
 
 function handleUserInput(req) {
-  // 🔴 DEBUG HERE (Bug 5)
-  // No check if req.body or req.body.input exists
   const rawInput = req.body.input
 
   const safeInput = sanitizeInput(rawInput)

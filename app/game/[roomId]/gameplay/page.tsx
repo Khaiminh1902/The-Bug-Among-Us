@@ -1,5 +1,4 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-
 "use client";
 
 import type * as Y from "yjs";
@@ -7,10 +6,15 @@ import type { Awareness } from "y-protocols/awareness";
 import { useEffect, useState, useRef } from "react";
 import { io, Socket } from "socket.io-client";
 import { useParams } from "next/navigation";
-import { IoPeopleOutline } from "react-icons/io5";
+import { IoPeopleOutline, IoCheckmark, IoClose } from "react-icons/io5";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
+import {
+  getTasksForCategory,
+  getSabotageTasksForCategory,
+  type Task,
+} from "@/data/tasks";
 
 type Player = {
   id: string;
@@ -33,6 +37,7 @@ export default function Page() {
   const [time, setTime] = useState(120);
   const [players, setPlayers] = useState<Player[]>([]);
   const [role, setRole] = useState<string | null>(null);
+  const roleRef = useRef<string | null>(null);
   const [round, setRound] = useState(1);
   const editorRef = useRef<any>(null);
   const ydocRef = useRef<Y.Doc | null>(null);
@@ -40,6 +45,8 @@ export default function Page() {
   const hasRedirected = useRef(false);
   const bindingRef = useRef<any>(null);
   const [ending, setEnding] = useState(false);
+  const [completedTasks, setCompletedTasks] = useState<number[]>([]);
+  const [currentTasks, setCurrentTasks] = useState<Task[]>([]);
 
   const initYjs = async (socket: Socket) => {
     const Y = await import("yjs");
@@ -90,6 +97,14 @@ export default function Page() {
 
     socket.on("vote-winner", (winner: string) => {
       setCategory(winner);
+      setCompletedTasks([]);
+      setTimeout(() => {
+        if (roleRef.current === "sabotager") {
+          setCurrentTasks(getSabotageTasksForCategory(winner));
+        } else {
+          setCurrentTasks(getTasksForCategory(winner));
+        }
+      }, 100);
     });
 
     socket.on("gameplay-timer", (t: number) => {
@@ -117,6 +132,11 @@ export default function Page() {
 
     socket.on("your-role", (r: string) => {
       setRole(r);
+      roleRef.current = r;
+    });
+
+    socket.on("player-tasks", (completed: number[]) => {
+      setCompletedTasks(completed);
     });
 
     socket.on("round-ended", (newRound: number) => {
@@ -167,6 +187,52 @@ export default function Page() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomId, router]);
+
+  const toggleTask = (bugId: number) => {
+    let newCompleted: number[];
+    if (completedTasks.includes(bugId)) {
+      newCompleted = completedTasks.filter((id) => id !== bugId);
+    } else {
+      newCompleted = [...completedTasks, bugId];
+    }
+    setCompletedTasks(newCompleted);
+
+    socketRef.current?.emit("update-tasks", {
+      roomId,
+      playerId: localStorage.getItem("playerId") || "",
+      completedTasks: newCompleted,
+    });
+  };
+
+  const checkBugFixes = (code: string) => {
+    const newlyDetected: number[] = [];
+
+    currentTasks.forEach((task) => {
+      if (completedTasks.includes(task.bugId)) return;
+
+      const fixPattern = task.fixDetection.toLowerCase();
+      const codeLower = code.toLowerCase();
+
+      const isFixed = fixPattern.split(" and ").every((pattern) => {
+        const trimmed = pattern.trim();
+        return codeLower.includes(trimmed);
+      });
+
+      if (isFixed) {
+        newlyDetected.push(task.bugId);
+      }
+    });
+
+    if (newlyDetected.length > 0) {
+      const newCompleted = [...completedTasks, ...newlyDetected];
+      setCompletedTasks(newCompleted);
+      socketRef.current?.emit("update-tasks", {
+        roomId,
+        playerId: localStorage.getItem("playerId") || "",
+        completedTasks: newCompleted,
+      });
+    }
+  };
 
   return (
     <div className="font-pixel flex flex-col h-screen bg-orange-100">
@@ -227,6 +293,74 @@ export default function Page() {
           )}
 
           <div className="text-xl font-bold mt-6">Tasks</div>
+
+          {role === "sabotager" ? (
+            <div className="mt-4">
+              {currentTasks.map((task) => (
+                <div
+                  key={task.bugId}
+                  className={`border p-2 mb-2 cursor-pointer transition-all ${
+                    completedTasks.includes(task.bugId)
+                      ? "bg-green-200 border-green-500"
+                      : "bg-red-100 border-red-400 hover:bg-red-200"
+                  }`}
+                  onClick={() => toggleTask(task.bugId)}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="text-sm font-bold">
+                      Task {task.bugId} (line {task.line})
+                    </div>
+                    <div>
+                      {completedTasks.includes(task.bugId) ? (
+                        <IoCheckmark className="text-green-600" />
+                      ) : (
+                        <IoClose className="text-red-600" />
+                      )}
+                    </div>
+                  </div>
+                  <div className="text-xs mt-1">{task.description}</div>
+                </div>
+              ))}
+              {currentTasks.length > 0 && (
+                <div className="text-xs mt-2 text-center">
+                  {completedTasks.length}/{currentTasks.length} completed
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="mt-4">
+              {currentTasks.map((task) => (
+                <div
+                  key={task.bugId}
+                  className={`border p-2 mb-2 cursor-pointer transition-all ${
+                    completedTasks.includes(task.bugId)
+                      ? "bg-green-200 border-green-500"
+                      : "bg-yellow-100 border-yellow-400 hover:bg-yellow-200"
+                  }`}
+                  onClick={() => toggleTask(task.bugId)}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="text-sm font-bold">
+                      Bug {task.bugId} (line {task.line})
+                    </div>
+                    <div>
+                      {completedTasks.includes(task.bugId) ? (
+                        <IoCheckmark className="text-green-600" />
+                      ) : (
+                        <IoClose className="text-yellow-600" />
+                      )}
+                    </div>
+                  </div>
+                  <div className="text-xs mt-1">{task.description}</div>
+                </div>
+              ))}
+              {currentTasks.length > 0 && (
+                <div className="text-xs mt-2 text-center">
+                  {completedTasks.length}/{currentTasks.length} fixed
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="border-t w-full">
@@ -248,6 +382,13 @@ export default function Page() {
                 onMount={(editor) => {
                   editorRef.current = editor;
                   bindingRef.current?.(editor);
+
+                  editor.onDidChangeModelContent(() => {
+                    const code = editor.getValue();
+                    if (roleRef.current !== "sabotager") {
+                      checkBugFixes(code);
+                    }
+                  });
                 }}
               />
             )}

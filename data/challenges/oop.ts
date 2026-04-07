@@ -1,8 +1,6 @@
 export const code = `
 class Player {
   constructor(name, score) {
-    // 🔴 DEBUG HERE (Bug 1)
-    // name and score are not assigned to the instance
 
   }
 
@@ -11,8 +9,6 @@ class Player {
   }
 
   addScore(points) {
-    // 🔴 DEBUG HERE (Bug 2)
-    // No validation for points (negative or not a number)
 
     this.score += points
   }
@@ -37,8 +33,6 @@ class ScoreBoard {
     for (let i = 0; i < this.players.length; i++) {
       const p = this.players[i]
 
-      // 🔴 DEBUG HERE (Bug 3)
-      // Comparison logic is incorrect
       if (!top || p.score < top.score) {
         top = p
       }
@@ -49,8 +43,6 @@ class ScoreBoard {
 
   findPlayer(name) {
     for (let i = 0; i < this.players.length; i++) {
-      // 🔴 DEBUG HERE (Bug 4)
-      // Assignment instead of comparison
       if (this.players[i].name = name) {
         return this.players[i]
       }
@@ -61,8 +53,6 @@ class ScoreBoard {
 }
 
 function createPlayer(name, score) {
-  // 🔴 DEBUG HERE (Bug 5)
-  // Missing validation for invalid score (negative or non-number)
   return new Player(name, score)
 }
 

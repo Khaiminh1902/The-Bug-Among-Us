@@ -33,6 +33,9 @@ const gameState: {
     time: number;
     round: number;
     phase: "gameplay" | "discussion";
+    playerTasks: {
+      [playerId: string]: number[];
+    };
   };
 } = {};
 
@@ -378,6 +381,7 @@ app.prepare().then(() => {
             time: 60,
             round: 1,
             phase: "gameplay",
+            playerTasks: {},
           };
 
           if (!docs[roomId]) docs[roomId] = new Y.Doc();
@@ -410,6 +414,16 @@ app.prepare().then(() => {
         votes[roomId][category].push(clientPlayerId);
 
         io.to(roomId).emit("vote-update", votes[roomId]);
+      },
+    );
+
+    socket.on(
+      "update-tasks",
+      (data: { roomId: string; playerId: string; completedTasks: number[] }) => {
+        const { roomId, playerId, completedTasks } = data;
+        if (gameState[roomId] && gameState[roomId].playerTasks) {
+          gameState[roomId].playerTasks[playerId] = completedTasks;
+        }
       },
     );
 
@@ -486,6 +500,12 @@ app.prepare().then(() => {
             socket.emit("yjs-state", {
               state: Array.from(Y.encodeStateAsUpdate(docs[roomId])),
             });
+          }
+          if (gameState[roomId]?.playerTasks && clientPlayerId) {
+            socket.emit(
+              "player-tasks",
+              gameState[roomId].playerTasks[clientPlayerId] || [],
+            );
           }
         }
         if (gameplayTimers[roomId]) {

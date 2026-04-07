@@ -13,8 +13,6 @@ export default function TabApp() {
     })
   }
 
-  // 🔴 DEBUG HERE (Bug 1)
-  // Missing "key" prop when rendering lists
   function renderTabs(tabObjects) {
     return tabObjects.map((tab) => {
       if (tab.active) {
@@ -33,14 +31,10 @@ export default function TabApp() {
     })
   }
 
-  // 🔴 DEBUG HERE (Bug 2)
-  // State is not being updated when clicking a tab
   function handleTabClick(tabName) {
     highlightActiveTab(tabs, tabName)
   }
 
-  // 🔴 DEBUG HERE (Bug 3)
-  // Assignment instead of comparison
   function findTabIndex(tabName) {
     for (let i = 0; i < tabs.length; i++) {
       if (tabs[i] = tabName) {
@@ -50,15 +44,11 @@ export default function TabApp() {
     return -1
   }
 
-  // 🔴 DEBUG HERE (Bug 4)
-  // Removing a tab should also handle activeTab correctly
   function removeTab(tabName) {
     const updatedTabs = tabs.filter(tab => tab !== tabName)
     setTabs(updatedTabs)
   }
 
-  // 🔴 DEBUG HERE (Bug 5)
-  // useEffect missing dependency
   React.useEffect(() => {
     console.log("Active tab changed:", activeTab)
   }, [])

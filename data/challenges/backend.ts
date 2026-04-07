@@ -2,8 +2,6 @@ export const code = `
 function validateUserInput(user) {
   let errors = []
 
-  // 🔴 DEBUG HERE (Bug 1)
-  // What happens if "user" is null or undefined?
   if (!user.name) {
     errors.push("Name is required")
   } else if (user.name.length < 2) {
@@ -25,8 +23,6 @@ function validateUserInput(user) {
   }
 
   if (user.age) {
-    // 🔴 DEBUG HERE (Bug 2)
-    // Check type comparison (number vs string)
     if (user.age < "13") {
       errors.push("User must be at least 13")
     }
@@ -47,8 +43,6 @@ function saveUser(user) {
     console.log("Validation failed:", result.errors)
   }
 
-  // 🔴 DEBUG HERE (Bug 3)
-  // Should invalid users be saved?
   database.push(user)
 
   return true
@@ -56,8 +50,6 @@ function saveUser(user) {
 
 function findUserByEmail(email) {
   for (let i = 0; i < database.length; i++) {
-    // 🔴 DEBUG HERE (Bug 4)
-    // Is this comparison correct?
     if (database[i].email = email) {
       return database[i]
     }
@@ -67,8 +59,6 @@ function findUserByEmail(email) {
 }
 
 function registerUser(req) {
-  // 🔴 DEBUG HERE (Bug 5)
-  // What if req.body is missing?
   const user = req.body
 
   const saved = saveUser(user)
