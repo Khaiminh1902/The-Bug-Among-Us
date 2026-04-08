@@ -17,6 +17,13 @@ const gameplayTimers: {
   };
 } = {};
 
+const gameplayTimerPaused: {
+  [roomId: string]: {
+    paused: boolean;
+    remainingTime: number;
+  };
+} = {};
+
 const discussionTimers: {
   [roomId: string]: {
     time: number;
@@ -171,7 +178,8 @@ app.prepare().then(() => {
 
         if (
           gameplayReady[roomId].size === totalPlayers &&
-          !gameplayTimers[roomId]
+          !gameplayTimers[roomId] &&
+          !gameplayTimerPaused[roomId]?.paused
         ) {
           console.log("All players reached gameplay page:", roomId);
 
@@ -207,6 +215,10 @@ app.prepare().then(() => {
     socket.on(
       "player-ready-discussion",
       ({ roomId, playerId }: { roomId: string; playerId?: string }) => {
+        if (gameplayTimerPaused[roomId]?.paused) {
+          return;
+        }
+
         if (!discussionReady[roomId]) discussionReady[roomId] = new Set();
 
         const clientPlayerId = playerId || socket.id;
@@ -312,6 +324,37 @@ app.prepare().then(() => {
                     gameState[roomId].round++;
                     gameState[roomId].phase = "gameplay";
 
+                    if (gameplayTimerPaused[roomId]?.paused) {
+                      gameplayTimers[roomId] = {
+                        time: gameplayTimerPaused[roomId].remainingTime,
+                      };
+
+                      gameplayTimers[roomId].interval = setInterval(() => {
+                        gameplayTimers[roomId].time--;
+
+                        io.to(roomId).emit(
+                          "gameplay-timer",
+                          gameplayTimers[roomId].time,
+                        );
+
+                        if (gameplayTimers[roomId].time <= 0) {
+                          clearInterval(gameplayTimers[roomId].interval!);
+                          delete gameplayTimers[roomId];
+                          gameplayReady[roomId] = new Set<string>();
+
+                          if (gameState[roomId]) {
+                            gameState[roomId].phase = "discussion";
+                            io.to(roomId).emit("phase-transition", {
+                              round: gameState[roomId].round,
+                              phase: "discussion",
+                            });
+                          }
+                        }
+                      }, 1000);
+
+                      delete gameplayTimerPaused[roomId];
+                    }
+
                     io.to(roomId).emit("phase-transition", {
                       round: gameState[roomId].round,
                       phase: "gameplay",
@@ -324,6 +367,7 @@ app.prepare().then(() => {
                     delete votes[roomId];
                     delete gameState[roomId];
                     delete rooms[roomId];
+                    delete gameplayTimerPaused[roomId];
                   }
                 }
               }, 3000);
@@ -332,6 +376,24 @@ app.prepare().then(() => {
         }
       },
     );
+
+    socket.on("emergency-button", (roomId: string) => {
+      console.log("Emergency button pressed in room:", roomId);
+
+      if (gameplayTimers[roomId]) {
+        clearInterval(gameplayTimers[roomId].interval!);
+        gameplayTimerPaused[roomId] = {
+          paused: true,
+          remainingTime: gameplayTimers[roomId].time,
+        };
+        delete gameplayTimers[roomId];
+      }
+
+      io.to(roomId).emit("phase-transition", {
+        round: gameState[roomId]?.round || 1,
+        phase: "discussion",
+      });
+    });
 
     socket.on("start-vote-timer", (roomId: string) => {
       const room = rooms[roomId];

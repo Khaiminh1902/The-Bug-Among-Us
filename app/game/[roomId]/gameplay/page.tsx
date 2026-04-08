@@ -362,7 +362,12 @@ export default function Page() {
           </div>
 
           <div className="w-full flex items-center justify-center mt-2.5">
-            <span className="border-black border p-2 bg-red-500 hover:bg-red-600 text-white cursor-pointer font-semibold">
+            <span
+              className="border-black border p-2 bg-red-500 hover:bg-red-600 text-white cursor-pointer font-semibold"
+              onClick={() => {
+                socketRef.current?.emit("emergency-button", roomId);
+              }}
+            >
               Emergency
             </span>
           </div>
