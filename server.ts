@@ -24,6 +24,10 @@ const gameplayTimerPaused: {
   };
 } = {};
 
+const emergencyTriggered: {
+  [roomId: string]: boolean;
+} = {};
+
 const discussionTimers: {
   [roomId: string]: {
     time: number;
@@ -215,10 +219,6 @@ app.prepare().then(() => {
     socket.on(
       "player-ready-discussion",
       ({ roomId, playerId }: { roomId: string; playerId?: string }) => {
-        if (gameplayTimerPaused[roomId]?.paused) {
-          return;
-        }
-
         if (!discussionReady[roomId]) discussionReady[roomId] = new Set();
 
         const clientPlayerId = playerId || socket.id;
@@ -321,7 +321,9 @@ app.prepare().then(() => {
 
                 if (gameState[roomId]) {
                   if (gameState[roomId].round < 4) {
-                    gameState[roomId].round++;
+                    if (!emergencyTriggered[roomId]) {
+                      gameState[roomId].round++;
+                    }
                     gameState[roomId].phase = "gameplay";
 
                     if (gameplayTimerPaused[roomId]?.paused) {
@@ -341,6 +343,7 @@ app.prepare().then(() => {
                           clearInterval(gameplayTimers[roomId].interval!);
                           delete gameplayTimers[roomId];
                           gameplayReady[roomId] = new Set<string>();
+                          delete emergencyTriggered[roomId];
 
                           if (gameState[roomId]) {
                             gameState[roomId].phase = "discussion";
@@ -368,6 +371,7 @@ app.prepare().then(() => {
                     delete gameState[roomId];
                     delete rooms[roomId];
                     delete gameplayTimerPaused[roomId];
+                    delete emergencyTriggered[roomId];
                   }
                 }
               }, 3000);
@@ -388,6 +392,8 @@ app.prepare().then(() => {
         };
         delete gameplayTimers[roomId];
       }
+
+      emergencyTriggered[roomId] = true;
 
       io.to(roomId).emit("phase-transition", {
         round: gameState[roomId]?.round || 1,
