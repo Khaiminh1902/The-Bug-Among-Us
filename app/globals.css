@@ -38,6 +38,6 @@
   z-index: 31;
 }
 
-[aria-label="Made with Liveblocks"] {
+#liveblocks-badge {
   display: none !important;
 }
