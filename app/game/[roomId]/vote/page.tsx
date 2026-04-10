@@ -20,6 +20,7 @@ export default function VotePage() {
   const roomId = params.roomId as string;
 
   const socketRef = useRef<Socket | null>(null);
+  const [isReady, setIsReady] = useState(false);
 
   const [time, setTime] = useState(10);
   const [votes, setVotes] = useState<Votes>({});
@@ -30,9 +31,31 @@ export default function VotePage() {
   const [countdown, setCountdown] = useState<number | null>(null);
   const [role, setRole] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const authChecked = useRef(false);
 
   useEffect(() => {
-    if (socketRef.current) return;
+    if (authChecked.current) return;
+    authChecked.current = true;
+
+    const allowedPhase = sessionStorage.getItem("allowed-phase");
+    if (allowedPhase !== "vote") {
+      if (allowedPhase === "lobby") {
+        window.location.replace(`/game/${roomId}`);
+        return;
+      }
+      if (allowedPhase === "gameplay" || allowedPhase === "discussion") {
+        window.location.replace(`/game/${roomId}/${allowedPhase}`);
+        return;
+      }
+      window.location.replace(`/game/${roomId}`);
+      return;
+    }
+
+    setIsReady(true); // eslint-disable-line react-hooks/set-state-in-effect
+  }, [roomId]);
+
+  useEffect(() => {
+    if (!isReady || socketRef.current) return;
 
     let playerId = localStorage.getItem("playerId");
     if (!playerId) {
@@ -55,15 +78,29 @@ export default function VotePage() {
 
     socket.on("vote-update", (data: Votes) => setVotes(data));
 
-    socket.on("vote-winner", (win: string) => {
+    socket.on("vote-winner", async (win: string) => {
       setWinner(win);
       setShowWinnerAnimation(true);
 
-      setTimeout(() => {
+      setTimeout(async () => {
         setLoading(true);
 
-        setTimeout(() => {
+        setTimeout(async () => {
           setLoading(true);
+
+          try {
+            await fetch("/api/game/authorize", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                roomId,
+                phase: "gameplay",
+              }),
+            });
+            sessionStorage.setItem("allowed-phase", "gameplay");
+          } catch (e) {
+            console.error("Failed to authorize:", e);
+          }
 
           setTimeout(() => {
             window.location.href = `/game/${roomId}/gameplay`;
@@ -80,7 +117,7 @@ export default function VotePage() {
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [roomId]);
+  }, [roomId, isReady]);
 
   const vote = (category: string) => {
     setSelected(category);
@@ -91,6 +128,10 @@ export default function VotePage() {
       playerId: localStorage.getItem("playerId"),
     });
   };
+
+  if (!isReady) {
+    return <div className="h-screen bg-black" />;
+  }
 
   if (loading) {
     return (

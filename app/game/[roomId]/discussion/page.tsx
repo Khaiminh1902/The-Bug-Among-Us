@@ -26,6 +26,7 @@ export default function Page() {
   const roomId = params.roomId as string;
   const router = useRouter();
   const socketRef = useRef<Socket | null>(null);
+  const [isReady, setIsReady] = useState(false);
   const [time, setTime] = useState(60);
   const [players, setPlayers] = useState<Player[]>([]);
   const [round, setRound] = useState(1);
@@ -40,6 +41,7 @@ export default function Page() {
   const [eliminatedIsSabotager, setEliminatedIsSabotager] = useState<
     boolean | null
   >(null);
+  const authChecked = useRef(false);
 
   const vote = (targetId: string) => {
     const currentPlayerId = localStorage.getItem("playerId");
@@ -53,7 +55,26 @@ export default function Page() {
   };
 
   useEffect(() => {
+    if (authChecked.current) return;
+    authChecked.current = true;
+
     if (typeof window === "undefined") return;
+
+    const allowedPhase = sessionStorage.getItem("allowed-phase");
+    if (allowedPhase !== "discussion") {
+      if (allowedPhase === "lobby") {
+        window.location.replace(`/game/${roomId}`);
+        return;
+      }
+      if (allowedPhase === "vote" || allowedPhase === "gameplay") {
+        window.location.replace(`/game/${roomId}/${allowedPhase}`);
+        return;
+      }
+      window.location.replace(`/game/${roomId}`);
+      return;
+    }
+
+    setIsReady(true); // eslint-disable-line react-hooks/set-state-in-effect
 
     const socket = io(process.env.NEXT_PUBLIC_SOCKET_URL, {
       reconnection: false,
@@ -97,17 +118,32 @@ export default function Page() {
 
     socket.on(
       "phase-transition",
-      ({ phase }: { round: number; phase: string }) => {
+      async ({ phase }: { round: number; phase: string }) => {
         setShowResult(false);
         setVoteResult(null);
         setEliminatedIsSabotager(null);
 
         if (phase === "gameplay") {
           setEnding(true);
-          setTimeout(() => {
-            hasRedirected.current = true;
-            router.push(`/game/${roomId}/gameplay`);
-          }, 800);
+
+try {
+        await fetch("/api/game/authorize", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            roomId,
+            phase: "gameplay",
+          }),
+        });
+        sessionStorage.setItem("allowed-phase", "gameplay");
+      } catch (e) {
+        console.error("Failed to authorize:", e);
+      }
+
+      setTimeout(() => {
+        hasRedirected.current = true;
+        router.push(`/game/${roomId}/gameplay`);
+      }, 800);
         }
       },
     );
@@ -120,11 +156,26 @@ export default function Page() {
       }, 800);
     });
 
-    socket.on("game-ended", () => {
+socket.on("game-ended", async () => {
       setEnding(true);
+
+      try {
+        await fetch("/api/game/authorize", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            roomId,
+            phase: "lobby",
+            clear: true,
+          }),
+        });
+      } catch (e) {
+        console.error("Failed to clear auth:", e);
+      }
+
       setTimeout(() => {
         hasRedirected.current = true;
-        router.push(`/`);
+        window.location.href = "/";
       }, 800);
     });
 
@@ -136,9 +187,24 @@ export default function Page() {
       setChatMessages((prev) => [...prev, message]);
     });
 
-    socket.on("kicked", () => {
+    socket.on("kicked", async () => {
       console.log("Received kicked event");
       setEnding(true);
+
+      try {
+        await fetch("/api/game/authorize", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            roomId,
+            phase: "lobby",
+            clear: true,
+          }),
+        });
+      } catch (e) {
+        console.error("Failed to clear auth:", e);
+      }
+
       setTimeout(() => {
         hasRedirected.current = true;
         window.location.href = "/";
@@ -175,6 +241,10 @@ export default function Page() {
       sendMessage();
     }
   };
+
+  if (!isReady) {
+    return <div className="h-screen bg-black" />;
+  }
 
   return (
     <div className="font-pixel flex flex-col h-screen bg-orange-100">
@@ -336,9 +406,6 @@ export default function Page() {
                         ? "was not the Sabotager"
                         : "was eliminated"}
                   </div>
-                  <span className="text-xs mt-2 text-gray-400">
-                    Next round starting...
-                  </span>
                 </h1>
               </>
             ) : (

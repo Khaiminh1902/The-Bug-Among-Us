@@ -31,6 +31,7 @@ export default function Page() {
   const params = useParams();
   const roomId = params.roomId as string;
   const router = useRouter();
+  const [isReady, setIsReady] = useState(false);
   const socketRef = useRef<Socket | null>(null);
   const [ready, setReady] = useState(false);
   const [category, setCategory] = useState("Waiting...");
@@ -47,6 +48,7 @@ export default function Page() {
   const [ending, setEnding] = useState(false);
   const [completedTasks, setCompletedTasks] = useState<number[]>([]);
   const [currentTasks, setCurrentTasks] = useState<Task[]>([]);
+  const authChecked = useRef(false);
 
   const initYjs = async (socket: Socket) => {
     const Y = await import("yjs");
@@ -83,6 +85,28 @@ export default function Page() {
   };
 
   useEffect(() => {
+    if (authChecked.current) return;
+    authChecked.current = true;
+
+    const allowedPhase = sessionStorage.getItem("allowed-phase");
+    if (allowedPhase !== "gameplay") {
+      if (allowedPhase === "lobby") {
+        window.location.replace(`/game/${roomId}`);
+        return;
+      }
+      if (allowedPhase === "vote" || allowedPhase === "discussion") {
+        window.location.replace(`/game/${roomId}/${allowedPhase}`);
+        return;
+      }
+      window.location.replace(`/game/${roomId}`);
+      return;
+    }
+
+    setIsReady(true);
+  }, [roomId]);
+
+  useEffect(() => {
+    if (!isReady) return;
     if (socketRef.current) return;
 
     const socket = io(process.env.NEXT_PUBLIC_SOCKET_URL);
@@ -149,9 +173,24 @@ export default function Page() {
 
     socket.on(
       "phase-transition",
-      ({ phase }: { round: number; phase: string }) => {
+      async ({ phase }: { round: number; phase: string }) => {
         if (phase === "discussion") {
           setEnding(true);
+
+          try {
+            await fetch("/api/game/authorize", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                roomId,
+                phase: "discussion",
+              }),
+            });
+            sessionStorage.setItem("allowed-phase", "discussion");
+          } catch (e) {
+            console.error("Failed to authorize:", e);
+          }
+
           setTimeout(() => {
             hasRedirected.current = true;
             router.push(`/game/${roomId}/discussion`);
@@ -160,9 +199,24 @@ export default function Page() {
       },
     );
 
-    socket.on("game-ended", () => {
+    socket.on("game-ended", async () => {
       setEnding(true);
-      setTimeout(() => {
+
+      try {
+        await fetch("/api/game/authorize", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            roomId,
+            phase: "lobby",
+            clear: true,
+          }),
+        });
+      } catch (e) {
+        console.error("Failed to clear auth:", e);
+      }
+
+      setTimeout(async () => {
         hasRedirected.current = true;
         router.push(`/`);
       }, 800);
@@ -186,7 +240,7 @@ export default function Page() {
       socketRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roomId, router]);
+  }, [roomId, router, isReady]);
 
   const toggleTask = (bugId: number) => {
     let newCompleted: number[];
@@ -203,6 +257,10 @@ export default function Page() {
       completedTasks: newCompleted,
     });
   };
+
+  if (!isReady) {
+    return <div className="h-screen bg-black" />;
+  }
 
   return (
     <div className="font-pixel flex flex-col h-screen bg-orange-100">

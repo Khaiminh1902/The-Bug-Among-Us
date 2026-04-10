@@ -29,14 +29,32 @@ const Page = () => {
     setIsLoading(true);
     localStorage.setItem("playerName", name);
 
+    let targetRoomId: string;
+
     if (action === "create") {
-      const roomId = Math.random().toString(36).substring(2, 8);
-      router.push(`/game/${roomId}`);
+      targetRoomId = Math.random().toString(36).substring(2, 8);
+    } else if (action === "join" && roomCode) {
+      targetRoomId = roomCode;
+    } else {
+      setIsLoading(false);
+      return;
     }
 
-    if (action === "join" && roomCode) {
-      router.push(`/game/${roomCode}`);
+    try {
+      await fetch("/api/game/authorize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          roomId: targetRoomId,
+          phase: "lobby",
+        }),
+      });
+      sessionStorage.setItem("allowed-phase", "lobby");
+    } catch (e) {
+      console.error("Failed to authorize:", e);
     }
+
+    router.push(`/game/${targetRoomId}`);
   };
 
   return (

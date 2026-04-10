@@ -1,12 +1,11 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { io } from "socket.io-client";
 import { FaCopy } from "react-icons/fa";
 import { Socket } from "socket.io-client";
 import { IoPeopleOutline } from "react-icons/io5";
-import { useRef } from "react";
 
 type Player = {
   id: string;
@@ -21,20 +20,42 @@ export default function Page() {
 
   const [players, setPlayers] = useState<Player[]>([]);
   const [showCopied, setShowCopied] = useState(false);
+  const [isReady, setIsReady] = useState(false);
 
   const socketRef = useRef<Socket | null>(null);
   const [countdown, setCountdown] = useState<number | null>(null);
   const [isStarting, setIsStarting] = useState(false);
+  const authChecked = useRef(false);
+
+    useEffect(() => {
+    if (authChecked.current) return;
+    authChecked.current = true;
+
+    const name = localStorage.getItem("playerName");
+    const allowedPhase = sessionStorage.getItem("allowed-phase");
+
+    if (!name || allowedPhase !== "lobby") {
+      if (allowedPhase === "vote" || allowedPhase === "gameplay" || allowedPhase === "discussion") {
+        window.location.replace(`/game/${roomId}/${allowedPhase}`);
+        return;
+      }
+      window.location.replace("/");
+      return;
+    }
+
+    setIsReady(true); // eslint-disable-line react-hooks/set-state-in-effect
+  }, [roomId]);
 
   useEffect(() => {
-    const name = localStorage.getItem("playerName");
-    if (!name) return;
+    if (!isReady) return;
 
     let playerId = localStorage.getItem("playerId");
     if (!playerId) {
       playerId = crypto.randomUUID();
       localStorage.setItem("playerId", playerId);
     }
+
+    const name = localStorage.getItem("playerName") || "";
 
     socketRef.current = io(process.env.NEXT_PUBLIC_SOCKET_URL);
 
@@ -53,21 +74,40 @@ export default function Page() {
       }
     });
 
-    socketRef.current.on("start-game", () => {
+    socketRef.current.on("start-game", async () => {
       console.log("GAME STARTED");
+
+      try {
+        await fetch("/api/game/authorize", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            roomId,
+            phase: "vote",
+          }),
+        });
+        sessionStorage.setItem("allowed-phase", "vote");
+      } catch (e) {
+        console.error("Failed to authorize:", e);
+      }
+
       window.location.href = `/game/${roomId}/vote`;
     });
 
     return () => {
       socketRef.current?.disconnect();
     };
-  }, [roomId]);
+  }, [roomId, isReady]);
 
   const copyRoomCode = async () => {
     await navigator.clipboard.writeText(roomId);
     setShowCopied(true);
     setTimeout(() => setShowCopied(false), 2000);
   };
+
+  if (!isReady) {
+    return <div className="h-screen bg-black" />;
+  }
 
   return (
     <div
