@@ -32,7 +32,6 @@ type LiveblocksPresence = {
     anchor: JsonObject;
     head: JsonObject;
   } | null;
-  isEditing: boolean;
   updatedAt: number;
 };
 
@@ -43,7 +42,20 @@ type EditorPresence = {
   playerId: string;
   name: string;
   color: string;
-  isEditing: boolean;
+};
+
+const getResolvedPresenceColors = (
+  presences: EditorPresence[],
+  players: Player[],
+) => {
+  const playerColors = new Map(
+    players.map((player) => [player.id, player.color]),
+  );
+
+  return presences.map((presence) => ({
+    ...presence,
+    color: playerColors.get(presence.playerId) || presence.color,
+  }));
 };
 
 type AwarenessState = {
@@ -116,15 +128,20 @@ const buildRemoteSelectionStyles = (presences: EditorPresence[]) =>
         }
 
         .yRemoteSelectionHead-${connectionId} {
-          border-left: 2px solid ${color};
           position: relative;
+          width: 2px !important;
+          margin-left: -1px;
+          border-left: 2px solid ${color};
+          pointer-events: none;
+          z-index: 30;
         }
 
         .yRemoteSelectionHead-${connectionId}::after {
           content: ${JSON.stringify(name)};
           position: absolute;
-          top: -1.5rem;
+          top: -1.65rem;
           left: -2px;
+          transform: translateZ(0);
           padding: 0.15rem 0.4rem;
           border-radius: 0.25rem;
           background: ${color};
@@ -132,6 +149,8 @@ const buildRemoteSelectionStyles = (presences: EditorPresence[]) =>
           font-size: 0.625rem;
           font-weight: 700;
           white-space: nowrap;
+          z-index: 31;
+          box-shadow: 0 2px 6px rgba(0, 0, 0, 0.28);
         }
       `,
     )
@@ -207,6 +226,19 @@ const syncRemoteAwarenessStates = (
   }
 };
 
+const createSafeBindingDestroyer = (binding: { destroy: () => void }) => {
+  let destroyed = false;
+
+  return () => {
+    if (destroyed) {
+      return;
+    }
+
+    destroyed = true;
+    binding.destroy();
+  };
+};
+
 const Editor = dynamic(() => import("@monaco-editor/react"), {
   ssr: false,
 });
@@ -230,7 +262,7 @@ export default function Page() {
   const liveblocksRoomRef = useRef<LiveblocksRoom | null>(null);
   const hasRedirected = useRef(false);
   const bindingRef = useRef<((editor: any) => void) | null>(null);
-  const monacoBindingRef = useRef<{ destroy: () => void } | null>(null);
+  const monacoBindingRef = useRef<(() => void) | null>(null);
   const pendingYjsStateRef = useRef<Uint8Array | null>(null);
   const hasInitialYjsStateRef = useRef(false);
   const [ending, setEnding] = useState(false);
@@ -281,7 +313,6 @@ export default function Page() {
           name: playerName,
           color: "#F59E0B",
           selection: null,
-          isEditing: false,
           updatedAt: Date.now(),
         },
       },
@@ -319,7 +350,6 @@ export default function Page() {
         name: playerName,
         color: state?.user?.color || "#F59E0B",
         selection,
-        isEditing: Boolean(selection),
         updatedAt: Date.now(),
       });
     };
@@ -360,7 +390,6 @@ export default function Page() {
           playerId: other.presence.playerId,
           name: other.presence.name,
           color: other.presence.color,
-          isEditing: other.presence.isEditing,
         })),
       );
     };
@@ -375,13 +404,14 @@ export default function Page() {
       const model = editor.getModel();
       if (!model) return;
 
-      monacoBindingRef.current?.destroy();
-      monacoBindingRef.current = new MonacoBinding(
+      monacoBindingRef.current?.();
+      const binding = new MonacoBinding(
         yText,
         model,
         new Set([editor]),
         awareness,
       );
+      monacoBindingRef.current = createSafeBindingDestroyer(binding);
     };
 
     bindingRef.current = bindEditor;
@@ -400,7 +430,7 @@ export default function Page() {
       awareness.off("update", handleAwarenessUpdate);
       unsubscribeOthers();
       window.clearInterval(presenceHeartbeat);
-      monacoBindingRef.current?.destroy();
+      monacoBindingRef.current?.();
       monacoBindingRef.current = null;
       bindingRef.current = null;
       awareness.destroy();
@@ -635,19 +665,24 @@ export default function Page() {
       color: currentPlayer.color,
       updatedAt: Date.now(),
     });
+
+    setEditorPresence((currentPresence) =>
+      getResolvedPresenceColors(currentPresence, players),
+    );
   }, [players]);
 
   if (!isReady) {
     return <div className="h-screen bg-black" />;
   }
 
-  const presenceByPlayerId = new Map(
-    editorPresence.map((presence) => [presence.playerId, presence]),
+  const resolvedEditorPresence = getResolvedPresenceColors(
+    editorPresence,
+    players,
   );
 
   return (
     <div className="font-pixel flex flex-col h-screen bg-orange-100">
-      <style>{buildRemoteSelectionStyles(editorPresence)}</style>
+      <style>{buildRemoteSelectionStyles(resolvedEditorPresence)}</style>
       <div className="w-screen h-15 grid grid-cols-3 items-center px-3">
         <div className="flex items-center gap-3">
           <div className="border-2 p-1 w-fit bg-orange-400">
@@ -686,11 +721,6 @@ export default function Page() {
                 style={{ backgroundColor: p.color }}
               ></div>
               <span>{p.name}</span>
-              {presenceByPlayerId.get(p.id)?.isEditing && (
-                <span className="ml-auto border border-black bg-white/70 px-1.5 py-0.5 text-[10px] uppercase tracking-wide">
-                  editing
-                </span>
-              )}
             </div>
           ))}
 

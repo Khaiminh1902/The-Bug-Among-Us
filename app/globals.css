@@ -29,4 +29,15 @@
 
 .yRemoteSelectionHead {
   position: relative;
+  z-index: 30;
+  overflow: visible !important;
+}
+
+.yRemoteSelectionHead::after,
+[class*="yRemoteSelectionHead-"]::after {
+  z-index: 31;
+}
+
+[aria-label="Made with Liveblocks"] {
+  display: none !important;
 }
