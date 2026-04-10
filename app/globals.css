@@ -22,3 +22,11 @@
     opacity: 1;
   }
 }
+
+.yRemoteSelection {
+  border-radius: 2px;
+}
+
+.yRemoteSelectionHead {
+  position: relative;
+}

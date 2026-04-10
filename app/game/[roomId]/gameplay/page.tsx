@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
+import { createClient, type JsonObject, type Room } from "@liveblocks/client";
 import type * as Y from "yjs";
 import type { Awareness } from "y-protocols/awareness";
 import { useEffect, useState, useRef } from "react";
@@ -23,6 +24,189 @@ type Player = {
   color: string;
 };
 
+type LiveblocksPresence = {
+  playerId: string;
+  name: string;
+  color: string;
+  selection: {
+    anchor: JsonObject;
+    head: JsonObject;
+  } | null;
+  isEditing: boolean;
+  updatedAt: number;
+};
+
+type LiveblocksRoom = Room<LiveblocksPresence>;
+
+type EditorPresence = {
+  connectionId: number;
+  playerId: string;
+  name: string;
+  color: string;
+  isEditing: boolean;
+};
+
+type AwarenessState = {
+  user?: {
+    playerId: string;
+    name: string;
+    color: string;
+  };
+  selection?: {
+    anchor: JsonObject;
+    head: JsonObject;
+  } | null;
+};
+
+type AwarenessMeta = {
+  clock: number;
+  lastUpdated: number;
+};
+
+type MutableAwareness = Awareness & {
+  clientID: number;
+  states: Map<number, AwarenessState>;
+  meta: Map<number, AwarenessMeta>;
+  emit: (
+    event: "change" | "update",
+    args: [
+      {
+        added: number[];
+        updated: number[];
+        removed: number[];
+      },
+      string,
+    ],
+  ) => void;
+};
+
+const LIVEBLOCKS_ROOM_PREFIX = "bug-among-us:editor:";
+
+const getLiveblocksRoomId = (roomId: string) =>
+  `${LIVEBLOCKS_ROOM_PREFIX}${roomId}`;
+
+const hexToRgba = (hex: string, alpha: number) => {
+  const normalized = hex.replace("#", "");
+  const value =
+    normalized.length === 3
+      ? normalized
+          .split("")
+          .map((char) => `${char}${char}`)
+          .join("")
+      : normalized;
+
+  if (!/^[0-9a-fA-F]{6}$/.test(value)) {
+    return `rgba(245, 158, 11, ${alpha})`;
+  }
+
+  const int = Number.parseInt(value, 16);
+  const r = (int >> 16) & 255;
+  const g = (int >> 8) & 255;
+  const b = int & 255;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+};
+
+const buildRemoteSelectionStyles = (presences: EditorPresence[]) =>
+  presences
+    .map(
+      ({ connectionId, color, name }) => `
+        .yRemoteSelection-${connectionId} {
+          background-color: ${hexToRgba(color, 0.22)};
+          border-left: 2px solid ${color};
+        }
+
+        .yRemoteSelectionHead-${connectionId} {
+          border-left: 2px solid ${color};
+          position: relative;
+        }
+
+        .yRemoteSelectionHead-${connectionId}::after {
+          content: ${JSON.stringify(name)};
+          position: absolute;
+          top: -1.5rem;
+          left: -2px;
+          padding: 0.15rem 0.4rem;
+          border-radius: 0.25rem;
+          background: ${color};
+          color: #111827;
+          font-size: 0.625rem;
+          font-weight: 700;
+          white-space: nowrap;
+        }
+      `,
+    )
+    .join("\n");
+
+const syncRemoteAwarenessStates = (
+  awareness: MutableAwareness,
+  others: readonly {
+    connectionId: number;
+    presence: LiveblocksPresence;
+  }[],
+) => {
+  const timestamp = Math.floor(Date.now() / 1000);
+  const added: number[] = [];
+  const updated: number[] = [];
+  const removed: number[] = [];
+  const trackedRemoteIds = new Set<number>();
+
+  for (const other of others) {
+    const clientId = other.connectionId;
+
+    if (clientId === awareness.clientID) {
+      continue;
+    }
+
+    trackedRemoteIds.add(clientId);
+
+    const nextState: AwarenessState = {
+      user: {
+        playerId: other.presence.playerId,
+        name: other.presence.name,
+        color: other.presence.color,
+      },
+      selection: other.presence.selection,
+    };
+
+    const previousState = awareness.states.get(clientId);
+    const previousSerialized = previousState
+      ? JSON.stringify(previousState)
+      : null;
+    const nextSerialized = JSON.stringify(nextState);
+
+    awareness.states.set(clientId, nextState);
+    awareness.meta.set(clientId, {
+      clock: (awareness.meta.get(clientId)?.clock ?? 0) + 1,
+      lastUpdated: timestamp,
+    });
+
+    if (!previousState) {
+      added.push(clientId);
+      continue;
+    }
+
+    if (previousSerialized !== nextSerialized) {
+      updated.push(clientId);
+    }
+  }
+
+  for (const clientId of awareness.states.keys()) {
+    if (clientId === awareness.clientID || trackedRemoteIds.has(clientId)) {
+      continue;
+    }
+
+    awareness.states.delete(clientId);
+    awareness.meta.delete(clientId);
+    removed.push(clientId);
+  }
+
+  if (added.length || updated.length || removed.length) {
+    const payload = { added, updated, removed };
+    awareness.emit("change", [payload, "liveblocks"]);
+    awareness.emit("update", [payload, "liveblocks"]);
+  }
+};
+
 const Editor = dynamic(() => import("@monaco-editor/react"), {
   ssr: false,
 });
@@ -43,6 +227,7 @@ export default function Page() {
   const editorRef = useRef<any>(null);
   const ydocRef = useRef<Y.Doc | null>(null);
   const awarenessRef = useRef<Awareness | null>(null);
+  const liveblocksRoomRef = useRef<LiveblocksRoom | null>(null);
   const hasRedirected = useRef(false);
   const bindingRef = useRef<((editor: any) => void) | null>(null);
   const monacoBindingRef = useRef<{ destroy: () => void } | null>(null);
@@ -51,6 +236,7 @@ export default function Page() {
   const [ending, setEnding] = useState(false);
   const [completedTasks, setCompletedTasks] = useState<number[]>([]);
   const [currentTasks, setCurrentTasks] = useState<Task[]>([]);
+  const [editorPresence, setEditorPresence] = useState<EditorPresence[]>([]);
   const authChecked = useRef(false);
 
   const initYjs = async (socket: Socket) => {
@@ -65,6 +251,42 @@ export default function Page() {
     awarenessRef.current = awareness;
 
     const yText = ydoc.getText("monaco");
+    const playerId = localStorage.getItem("playerId") || crypto.randomUUID();
+    const playerName = localStorage.getItem("playerName") || "Anonymous";
+    const liveblocksClient = createClient({
+      authEndpoint: async (room) => {
+        const response = await fetch("/api/liveblocks-auth", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            room,
+            roomId,
+            playerId,
+            name: playerName,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to authenticate with Liveblocks");
+        }
+
+        return await response.json();
+      },
+    });
+    const { room, leave } = liveblocksClient.enterRoom<LiveblocksPresence>(
+      getLiveblocksRoomId(roomId),
+      {
+        initialPresence: {
+          playerId,
+          name: playerName,
+          color: "#F59E0B",
+          selection: null,
+          isEditing: false,
+          updatedAt: Date.now(),
+        },
+      },
+    );
+    liveblocksRoomRef.current = room;
 
     const handleIncomingUpdate = (update: number[]) => {
       const uint8 = new Uint8Array(update);
@@ -81,6 +303,73 @@ export default function Page() {
     };
 
     ydoc.on("update", handleDocUpdate);
+
+    awareness.setLocalStateField("user", {
+      playerId,
+      name: playerName,
+      color: "#F59E0B",
+    });
+
+    const syncMyPresence = () => {
+      const state = awareness.getLocalState() as AwarenessState | null;
+      const selection = state?.selection ?? null;
+
+      room.updatePresence({
+        playerId,
+        name: playerName,
+        color: state?.user?.color || "#F59E0B",
+        selection,
+        isEditing: Boolean(selection),
+        updatedAt: Date.now(),
+      });
+    };
+
+    const handleAwarenessUpdate = ({
+      added,
+      updated,
+    }: {
+      added: number[];
+      updated: number[];
+      removed: number[];
+    }) => {
+      const localTouched = [...added, ...updated].includes(
+        (awareness as MutableAwareness).clientID,
+      );
+
+      if (localTouched) {
+        syncMyPresence();
+      }
+    };
+
+    const refreshRemotePresence = () => {
+      const others = room
+        .getOthers()
+        .map((other) => ({
+          connectionId: other.connectionId,
+          presence: other.presence,
+        }))
+        .filter((other) => other.presence.playerId);
+
+      syncRemoteAwarenessStates(
+        awareness as MutableAwareness,
+        others,
+      );
+      setEditorPresence(
+        others.map((other) => ({
+          connectionId: other.connectionId,
+          playerId: other.presence.playerId,
+          name: other.presence.name,
+          color: other.presence.color,
+          isEditing: other.presence.isEditing,
+        })),
+      );
+    };
+
+    awareness.on("update", handleAwarenessUpdate);
+    const unsubscribeOthers = room.subscribe("others", refreshRemotePresence);
+    const presenceHeartbeat = window.setInterval(refreshRemotePresence, 10000);
+    syncMyPresence();
+    refreshRemotePresence();
 
     const bindEditor = (editor: any) => {
       const model = editor.getModel();
@@ -108,6 +397,9 @@ export default function Page() {
 
     return () => {
       socket.off("yjs-update", handleIncomingUpdate);
+      awareness.off("update", handleAwarenessUpdate);
+      unsubscribeOthers();
+      window.clearInterval(presenceHeartbeat);
       monacoBindingRef.current?.destroy();
       monacoBindingRef.current = null;
       bindingRef.current = null;
@@ -115,8 +407,11 @@ export default function Page() {
       ydoc.destroy();
       awarenessRef.current = null;
       ydocRef.current = null;
+      leave();
+      liveblocksRoomRef.current = null;
       pendingYjsStateRef.current = null;
       hasInitialYjsStateRef.current = false;
+      setEditorPresence([]);
       setReady(false);
     };
   };
@@ -314,12 +609,45 @@ export default function Page() {
     });
   };
 
+  useEffect(() => {
+    const liveblocksRoom = liveblocksRoomRef.current;
+
+    if (!liveblocksRoom) {
+      return;
+    }
+
+    const currentPlayerId = localStorage.getItem("playerId");
+    const currentPlayer = players.find((player) => player.id === currentPlayerId);
+
+    if (!currentPlayer) {
+      return;
+    }
+
+    awarenessRef.current?.setLocalStateField("user", {
+      playerId: currentPlayer.id,
+      name: currentPlayer.name,
+      color: currentPlayer.color,
+    });
+
+    liveblocksRoom.updatePresence({
+      playerId: currentPlayer.id,
+      name: currentPlayer.name,
+      color: currentPlayer.color,
+      updatedAt: Date.now(),
+    });
+  }, [players]);
+
   if (!isReady) {
     return <div className="h-screen bg-black" />;
   }
 
+  const presenceByPlayerId = new Map(
+    editorPresence.map((presence) => [presence.playerId, presence]),
+  );
+
   return (
     <div className="font-pixel flex flex-col h-screen bg-orange-100">
+      <style>{buildRemoteSelectionStyles(editorPresence)}</style>
       <div className="w-screen h-15 grid grid-cols-3 items-center px-3">
         <div className="flex items-center gap-3">
           <div className="border-2 p-1 w-fit bg-orange-400">
@@ -352,15 +680,17 @@ export default function Page() {
           <div className="text-xl font-bold mb-3">Players</div>
 
           {players.map((p) => (
-            <div
-              key={p.id}
-              className="border p-2 mb-2 text-sm flex items-center"
-            >
+            <div key={p.id} className="border p-2 mb-2 text-sm flex items-center">
               <div
                 className="w-3 h-3 border mr-2"
                 style={{ backgroundColor: p.color }}
               ></div>
-              {p.name}
+              <span>{p.name}</span>
+              {presenceByPlayerId.get(p.id)?.isEditing && (
+                <span className="ml-auto border border-black bg-white/70 px-1.5 py-0.5 text-[10px] uppercase tracking-wide">
+                  editing
+                </span>
+              )}
             </div>
           ))}
 
