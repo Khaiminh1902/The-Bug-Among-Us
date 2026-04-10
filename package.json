@@ -10,6 +10,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@liveblocks/client": "^3.18.0",
     "@monaco-editor/react": "^4.7.0",
     "framer-motion": "^12.38.0",
     "monaco-editor": "^0.55.1",
