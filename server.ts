@@ -140,7 +140,7 @@ app.prepare().then(() => {
     socket.on("yjs-update", ({ roomId, update }) => {
       if (!docs[roomId]) docs[roomId] = new Y.Doc();
 
-      Y.applyUpdate(docs[roomId], update);
+      Y.applyUpdate(docs[roomId], new Uint8Array(update));
 
       socket.to(roomId).emit("yjs-update", update);
     });
@@ -455,8 +455,11 @@ app.prepare().then(() => {
 
           if (!docs[roomId]) docs[roomId] = new Y.Doc();
           const yText = docs[roomId].getText("monaco");
-          yText.delete(0, yText.length);
-          yText.insert(0, codeTemplates[winner] || "// Start coding...");
+          const currentContent = yText.toString();
+          if (currentContent === "" || currentContent === "// Start coding...") {
+            yText.delete(0, yText.length);
+            yText.insert(0, codeTemplates[winner] || "// Start coding...");
+          }
 
           io.to(roomId).emit("vote-winner", winner);
         }

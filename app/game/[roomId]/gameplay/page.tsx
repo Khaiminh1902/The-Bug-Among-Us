@@ -44,7 +44,10 @@ export default function Page() {
   const ydocRef = useRef<Y.Doc | null>(null);
   const awarenessRef = useRef<Awareness | null>(null);
   const hasRedirected = useRef(false);
-  const bindingRef = useRef<any>(null);
+  const bindingRef = useRef<((editor: any) => void) | null>(null);
+  const monacoBindingRef = useRef<{ destroy: () => void } | null>(null);
+  const pendingYjsStateRef = useRef<Uint8Array | null>(null);
+  const hasInitialYjsStateRef = useRef(false);
   const [ending, setEnding] = useState(false);
   const [completedTasks, setCompletedTasks] = useState<number[]>([]);
   const [currentTasks, setCurrentTasks] = useState<Task[]>([]);
@@ -53,35 +56,69 @@ export default function Page() {
   const initYjs = async (socket: Socket) => {
     const Y = await import("yjs");
     const { MonacoBinding } = await import("y-monaco");
-    const { Awareness } = await import("y-protocols/awareness");
+    const { Awareness: YAwareness } = await import("y-protocols/awareness");
 
     const ydoc = new Y.Doc();
     ydocRef.current = ydoc;
 
-    const awareness = new Awareness(ydoc);
+    const awareness = new YAwareness(ydoc);
     awarenessRef.current = awareness;
 
     const yText = ydoc.getText("monaco");
 
-    socket.on("yjs-update", (update: number[]) => {
+    const handleIncomingUpdate = (update: number[]) => {
       const uint8 = new Uint8Array(update);
       Y.applyUpdate(ydoc, uint8);
-    });
+    };
 
-    ydoc.on("update", (update: Uint8Array) => {
+    socket.on("yjs-update", handleIncomingUpdate);
+
+    const handleDocUpdate = (update: Uint8Array) => {
       socket.emit("yjs-update", {
         roomId,
         update: Array.from(update),
       });
-    });
-
-    bindingRef.current = (editor: any) => {
-      new MonacoBinding(yText, editor.getModel(), new Set([editor]), awareness);
     };
 
-    setReady(true);
+    ydoc.on("update", handleDocUpdate);
+
+    const bindEditor = (editor: any) => {
+      const model = editor.getModel();
+      if (!model) return;
+
+      monacoBindingRef.current?.destroy();
+      monacoBindingRef.current = new MonacoBinding(
+        yText,
+        model,
+        new Set([editor]),
+        awareness,
+      );
+    };
+
+    bindingRef.current = bindEditor;
+
+    if (pendingYjsStateRef.current) {
+      Y.applyUpdate(ydoc, pendingYjsStateRef.current);
+      pendingYjsStateRef.current = null;
+      hasInitialYjsStateRef.current = true;
+      setReady(true);
+    }
 
     socket.emit("get-yjs-state", { roomId });
+
+    return () => {
+      socket.off("yjs-update", handleIncomingUpdate);
+      monacoBindingRef.current?.destroy();
+      monacoBindingRef.current = null;
+      bindingRef.current = null;
+      awareness.destroy();
+      ydoc.destroy();
+      awarenessRef.current = null;
+      ydocRef.current = null;
+      pendingYjsStateRef.current = null;
+      hasInitialYjsStateRef.current = false;
+      setReady(false);
+    };
   };
 
   useEffect(() => {
@@ -136,18 +173,27 @@ export default function Page() {
     });
 
     socket.on("yjs-state", async (data: { state: number[] }) => {
-      let attempts = 0;
-      const applyState = async () => {
-        attempts++;
-        if (data.state && data.state.length > 0 && ydocRef.current) {
-          const Y = await import("yjs");
-          const uint8 = new Uint8Array(data.state);
-          Y.applyUpdate(ydocRef.current, uint8);
-        } else if (data.state && data.state.length > 0 && attempts < 10) {
-          setTimeout(applyState, 100);
+      if (!data.state?.length) {
+        if (!hasInitialYjsStateRef.current) {
+          hasInitialYjsStateRef.current = true;
+          setReady(true);
         }
-      };
-      applyState();
+        return;
+      }
+
+      const uint8 = new Uint8Array(data.state);
+
+      if (ydocRef.current) {
+        const Y = await import("yjs");
+        Y.applyUpdate(ydocRef.current, uint8);
+      } else {
+        pendingYjsStateRef.current = uint8;
+      }
+
+      if (!hasInitialYjsStateRef.current) {
+        hasInitialYjsStateRef.current = true;
+        setReady(true);
+      }
     });
 
     socket.on("room-data", (data: Player[]) => {
@@ -228,7 +274,15 @@ export default function Page() {
       playerId: localStorage.getItem("playerId"),
     });
 
-    initYjs(socket);
+    let isDisposed = false;
+    let disposeYjs: (() => void) | undefined;
+    void initYjs(socket).then((cleanup) => {
+      if (isDisposed) {
+        cleanup();
+        return;
+      }
+      disposeYjs = cleanup;
+    });
 
     socket.emit("player-ready-gameplay", {
       roomId,
@@ -236,6 +290,8 @@ export default function Page() {
     });
 
     return () => {
+      isDisposed = true;
+      disposeYjs?.();
       socket.disconnect();
       socketRef.current = null;
     };
@@ -410,10 +466,6 @@ export default function Page() {
                 onMount={(editor) => {
                   editorRef.current = editor;
                   bindingRef.current?.(editor);
-
-                  editor.onDidChangeModelContent(() => {
-                    const code = editor.getValue();
-                  });
                 }}
               />
             )}
