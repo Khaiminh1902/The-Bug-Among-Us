@@ -233,6 +233,7 @@ app.prepare().then(() => {
           console.log("All players reached discussion page:", roomId);
 
           discussionTimers[roomId] = { time: 60 };
+          io.to(roomId).emit("discussion-timer", discussionTimers[roomId].time);
 
           discussionTimers[roomId].interval = setInterval(() => {
             discussionTimers[roomId].time--;
@@ -586,6 +587,9 @@ app.prepare().then(() => {
         }
         if (gameplayTimers[roomId]) {
           socket.emit("gameplay-timer", gameplayTimers[roomId].time);
+        }
+        if (discussionTimers[roomId]) {
+          socket.emit("discussion-timer", discussionTimers[roomId].time);
         }
       },
     );

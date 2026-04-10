@@ -75,6 +75,10 @@ export default function Page() {
     }
 
     setIsReady(true); // eslint-disable-line react-hooks/set-state-in-effect
+  }, [roomId]);
+
+  useEffect(() => {
+    if (!isReady || socketRef.current) return;
 
     const socket = io(process.env.NEXT_PUBLIC_SOCKET_URL, {
       reconnection: false,
@@ -91,7 +95,7 @@ export default function Page() {
     socket.emit("join-room", {
       roomId,
       name: localStorage.getItem("playerName"),
-      playerId: localStorage.getItem("playerId"),
+      playerId,
     });
 
     socket.on("room-data", (data: Player[]) => {
@@ -126,24 +130,24 @@ export default function Page() {
         if (phase === "gameplay") {
           setEnding(true);
 
-try {
-        await fetch("/api/game/authorize", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            roomId,
-            phase: "gameplay",
-          }),
-        });
-        sessionStorage.setItem("allowed-phase", "gameplay");
-      } catch (e) {
-        console.error("Failed to authorize:", e);
-      }
+          try {
+            await fetch("/api/game/authorize", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                roomId,
+                phase: "gameplay",
+              }),
+            });
+            sessionStorage.setItem("allowed-phase", "gameplay");
+          } catch (e) {
+            console.error("Failed to authorize:", e);
+          }
 
-      setTimeout(() => {
-        hasRedirected.current = true;
-        router.push(`/game/${roomId}/gameplay`);
-      }, 800);
+          setTimeout(() => {
+            hasRedirected.current = true;
+            router.push(`/game/${roomId}/gameplay`);
+          }, 800);
         }
       },
     );
@@ -156,7 +160,7 @@ try {
       }, 800);
     });
 
-socket.on("game-ended", async () => {
+    socket.on("game-ended", async () => {
       setEnding(true);
 
       try {
@@ -211,13 +215,16 @@ socket.on("game-ended", async () => {
       }, 800);
     });
 
-    socket.emit("player-ready-discussion", { roomId });
+    socket.emit("player-ready-discussion", {
+      roomId,
+      playerId,
+    });
 
     return () => {
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [roomId, router]);
+  }, [roomId, router, isReady]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
