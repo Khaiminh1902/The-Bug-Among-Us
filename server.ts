@@ -446,6 +446,17 @@ app.prepare().then(() => {
             }
           }
 
+          if (!winner) {
+            const allCategories = [
+              "Front-End",
+              "Back-End",
+              "Security",
+              "Data Structures and Algorithms",
+              "Object-Oriented Programming",
+            ];
+            winner = allCategories[Math.floor(Math.random() * allCategories.length)];
+          }
+
           gameState[roomId] = {
             category: winner,
             time: 60,
