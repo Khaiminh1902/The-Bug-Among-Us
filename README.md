@@ -1,28 +1,52 @@
-THE BUG AMONG US
-
-Among Us for Programmers. Fix the bugs as fast as you can and try to catch the ones sabotaging the code.
+████████╗██╗  ██╗███████╗    ██████╗ ██╗   ██╗ ██████╗     █████╗ ███╗   ███╗ ██████╗ ███╗   ██╗ ██████╗     ██╗   ██╗███████╗
+╚══██╔══╝██║  ██║██╔════╝    ██╔══██╗██║   ██║██╔════╝    ██╔══██╗████╗ ████║██╔═══██╗████╗  ██║██╔════╝     ██║   ██║██╔════╝
+   ██║   ███████║█████╗      ██████╔╝██║   ██║██║  ███╗   ███████║██╔████╔██║██║   ██║██╔██╗ ██║██║  ███╗    ██║   ██║███████╗
+   ██║   ██╔══██║██╔══╝      ██╔══██╗██║   ██║██║   ██║   ██╔══██║██║╚██╔╝██║██║   ██║██║╚██╗██║██║   ██║    ██║   ██║╚════██║
+   ██║   ██║  ██║███████╗    ██████╔╝╚██████╔╝╚██████╔╝   ██║  ██║██║ ╚═╝ ██║╚██████╔╝██║ ╚████║╚██████╔╝    ╚██████╔╝███████║
+   ╚═╝   ╚═╝  ╚═╝╚══════╝    ╚═════╝  ╚═════╝  ╚═════╝    ╚═╝  ╚═╝╚═╝     ╚═╝ ╚═════╝ ╚═╝  ╚═══╝ ╚═════╝      ╚═════╝ ╚══════╝
+   
 
 Inspired by: https://tally.so/r/aQ2kq9
 
+---
 
-GAMEPLAY
+## 🎮 Gameplay
+Everyone gets a role. No one is safe.
 
-Players are divided into two roles:
+### Civilians
+- Fix bugs. That’s literally your job  
+- Talk to people, share info, pretend you know what you're doing  
+- Try not to get voted out for “looking sus”  
 
-- Civilians: Work with each other to identify and fix the bugs in the codebase before the timer run out
-- Sabotagers: Blend in with others while secretly create new bugs to confuse the other players
+### Sabotagers
+- You look like a civilian. You are not.  
+- Sneak bugs into the code when no one’s paying attention  
+- Act helpful. Act innocent. Gaslight if necessary (just a little)  
 
+---
 
-WIN CONDITIONS
+## 🏆 Win Conditions
 
-- If timer runs out and the bugs still remain unfixed -> Sabotagers win
-- If number of civilians = number of sabotagers -> Sabotagers win
-- If all sabotagers are voted out -> Civilians win
-- If all bugs are fixed in time -> Civilians win
+### Civilians win if:
+- You somehow vote out all the sabotagers  
+- Or you clutch up and fix every bug in time  
 
+### Sabotagers win if:
+- The timer hits zero, all 4 rounds end and the code is still broken 💀  
+- Or it’s just you and the civilians left... awkward  
 
-RULES
+---
 
-- Communicate and collaborate with others to identify and fux the bugs, but don’t fully trust anyone
-- You MUST vote wisely, one wrong decision could cost you the game
-- Fix the bugs quickly to stay ahead of the sabotagers
+## 📜 Rules
+- Talk, argue, accuse - just don’t sit there silently  
+- Trust is good. Blind trust? That’s how you lose  
+- Voting matters. Yes, even *your* vote  
+- Fix bugs fast or things will spiral  
+
+---
+
+## 💡 Tips
+- If someone says “trust me bro"... don’t  
+- The quiet one? yeah... keep an eye on them  
+- If the code suddenly breaks more... hmm wonder why  
+- Sometimes you’re wrong. It happens. Vote anyway  
