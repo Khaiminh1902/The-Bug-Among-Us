@@ -7,9 +7,6 @@
    ╚═╝   ╚═╝  ╚═╝╚══════╝    ╚═════╝  ╚═════╝  ╚═════╝    ╚═╝  ╚═╝╚═╝     ╚═╝ ╚═════╝ ╚═╝  ╚═══╝ ╚═════╝      ╚═════╝ ╚══════╝
 ```
 
-
-Inspired by: https://tally.so/r/aQ2kq9
-
 ---
 
 ## 🎮 Gameplay
@@ -52,3 +49,8 @@ Everyone gets a role. No one is safe.
 - The quiet one? yeah... keep an eye on them  
 - If the code suddenly breaks more... hmm wonder why  
 - Sometimes you’re wrong. It happens. Vote anyway  
+
+---
+
+
+Inspired by: https://tally.so/r/aQ2kq9
