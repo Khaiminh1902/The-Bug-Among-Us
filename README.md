@@ -1,6 +1,7 @@
-+--------------------+
-| THE BUG AMONG US   |
-+--------------------+
+```text
+THE BUG AMONG US
+----------------
+```
 
 Inspired by: https://tally.so/r/aQ2kq9
 
