@@ -281,6 +281,46 @@ app.prepare().then(() => {
                 isSabotager: eliminatedRole === "sabotager",
               });
 
+              const remainingPlayers = Object.keys(roles[roomId] || {}).filter(
+                (id) => id !== eliminated,
+              );
+
+              const remainingSabotagers = remainingPlayers.filter(
+                (id) => roles[roomId]?.[id] === "sabotager",
+              );
+
+              const remainingCivilians = remainingPlayers.filter(
+                (id) => roles[roomId]?.[id] === "civilian",
+              );
+
+              if (remainingSabotagers.length === 0) {
+                io.to(roomId).emit("game-ended");
+                io.to(roomId).emit("winner", "civilian");
+                delete eliminatedPlayers[roomId];
+                delete gameplayTimers[roomId];
+                delete discussionTimers[roomId];
+                delete votes[roomId];
+                delete gameState[roomId];
+                delete rooms[roomId];
+                delete gameplayTimerPaused[roomId];
+                delete emergencyTriggered[roomId];
+                return;
+              }
+
+              if (remainingCivilians.length === 0) {
+                io.to(roomId).emit("game-ended");
+                io.to(roomId).emit("winner", "sabotager");
+                delete eliminatedPlayers[roomId];
+                delete gameplayTimers[roomId];
+                delete discussionTimers[roomId];
+                delete votes[roomId];
+                delete gameState[roomId];
+                delete rooms[roomId];
+                delete gameplayTimerPaused[roomId];
+                delete emergencyTriggered[roomId];
+                return;
+              }
+
               setTimeout(() => {
                 if (eliminated) {
                   const id = eliminated;
@@ -365,6 +405,7 @@ app.prepare().then(() => {
                     });
                   } else {
                     io.to(roomId).emit("game-ended");
+                    io.to(roomId).emit("winner", "sabotager");
                     delete eliminatedPlayers[roomId];
                     delete gameplayTimers[roomId];
                     delete discussionTimers[roomId];

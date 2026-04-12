@@ -160,26 +160,31 @@ export default function Page() {
       }, 800);
     });
 
-    socket.on("game-ended", async () => {
+    socket.on("game-ended", () => {
+      setEnding(true);
+    });
+
+    socket.on("winner", (winner: string) => {
       setEnding(true);
 
       try {
-        await fetch("/api/game/authorize", {
+        fetch("/api/game/authorize", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             roomId,
-            phase: "lobby",
-            clear: true,
+            phase: "winning",
           }),
         });
+        sessionStorage.setItem("allowed-phase", "winning");
+        sessionStorage.setItem("winner", JSON.stringify({ winner }));
       } catch (e) {
-        console.error("Failed to clear auth:", e);
+        console.error("Failed to set winner:", e);
       }
 
       setTimeout(() => {
         hasRedirected.current = true;
-        window.location.href = "/";
+        router.push(`/game/${roomId}/winning`);
       }, 800);
     });
 
