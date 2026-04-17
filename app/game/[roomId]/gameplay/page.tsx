@@ -7,7 +7,7 @@ import type { Awareness } from "y-protocols/awareness";
 import { useEffect, useState, useRef } from "react";
 import { io, Socket } from "socket.io-client";
 import { useParams } from "next/navigation";
-import { IoPeopleOutline, IoCheckmark, IoClose } from "react-icons/io5";
+import { IoPeopleOutline } from "react-icons/io5";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
@@ -16,6 +16,7 @@ import {
   getSabotageTasksForCategory,
   type Task,
 } from "@/data/tasks";
+import { guideTemplates } from "@/data/challenges/guides";
 
 type Player = {
   id: string;
@@ -226,8 +227,15 @@ const syncRemoteAwarenessStates = (
   }
 };
 
-const createSafeBindingDestroyer = (binding: { destroy: () => void }) => {
+const createSafeBindingDestroyer = (
+  binding: { destroy: () => void },
+  model: { onWillDispose: (listener: () => void) => { dispose: () => void } },
+) => {
   let destroyed = false;
+  const disposeTracker = model.onWillDispose(() => {
+    destroyed = true;
+    disposeTracker.dispose();
+  });
 
   return () => {
     if (destroyed) {
@@ -235,6 +243,7 @@ const createSafeBindingDestroyer = (binding: { destroy: () => void }) => {
     }
 
     destroyed = true;
+    disposeTracker.dispose();
     binding.destroy();
   };
 };
@@ -269,6 +278,20 @@ export default function Page() {
   const [completedTasks, setCompletedTasks] = useState<number[]>([]);
   const [currentTasks, setCurrentTasks] = useState<Task[]>([]);
   const [editorPresence, setEditorPresence] = useState<EditorPresence[]>([]);
+  const [validationMessage, setValidationMessage] = useState("");
+  const [isRunningCode, setIsRunningCode] = useState(false);
+  const [activeEditorTab, setActiveEditorTab] = useState<"code" | "guide">(
+    "code",
+  );
+  const [runCodePopup, setRunCodePopup] = useState<{
+    open: boolean;
+    title: string;
+    message: string;
+  }>({
+    open: false,
+    title: "",
+    message: "",
+  });
   const authChecked = useRef(false);
 
   const initYjs = async (socket: Socket) => {
@@ -411,7 +434,7 @@ export default function Page() {
         new Set([editor]),
         awareness,
       );
-      monacoBindingRef.current = createSafeBindingDestroyer(binding);
+      monacoBindingRef.current = createSafeBindingDestroyer(binding, model);
     };
 
     bindingRef.current = bindEditor;
@@ -427,12 +450,13 @@ export default function Page() {
 
     return () => {
       socket.off("yjs-update", handleIncomingUpdate);
-      awareness.off("update", handleAwarenessUpdate);
+      ydoc.off("update", handleDocUpdate);
       unsubscribeOthers();
       window.clearInterval(presenceHeartbeat);
       monacoBindingRef.current?.();
       monacoBindingRef.current = null;
       bindingRef.current = null;
+      editorRef.current = null;
       awareness.destroy();
       ydoc.destroy();
       awarenessRef.current = null;
@@ -484,6 +508,9 @@ export default function Page() {
     socket.on("vote-winner", (winner: string) => {
       setCategory(winner);
       setCompletedTasks([]);
+      setValidationMessage("");
+      setRunCodePopup({ open: false, title: "", message: "" });
+      setActiveEditorTab("code");
       setTimeout(() => {
         if (roleRef.current === "sabotager") {
           setCurrentTasks(getSabotageTasksForCategory(winner));
@@ -628,20 +655,56 @@ export default function Page() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomId, router, isReady]);
 
-  const toggleTask = (bugId: number) => {
-    let newCompleted: number[];
-    if (completedTasks.includes(bugId)) {
-      newCompleted = completedTasks.filter((id) => id !== bugId);
-    } else {
-      newCompleted = [...completedTasks, bugId];
-    }
-    setCompletedTasks(newCompleted);
+  const runCodeCheck = () => {
+    const code = editorRef.current?.getValue?.();
 
-    socketRef.current?.emit("update-tasks", {
-      roomId,
-      playerId: localStorage.getItem("playerId") || "",
-      completedTasks: newCompleted,
-    });
+    if (!code || !socketRef.current) {
+      setValidationMessage("Editor is still loading.");
+      return;
+    }
+
+    setIsRunningCode(true);
+    setValidationMessage("");
+
+    socketRef.current.emit(
+      "validate-code",
+      {
+        roomId,
+        playerId: localStorage.getItem("playerId") || "",
+        code,
+      },
+      (result: {
+        completedTasks: number[];
+        newlyFixedTasks?: number[];
+        remainingTasks: number;
+        totalTasks: number;
+        isComplete: boolean;
+        message: string;
+      }) => {
+        const newlyFixedTasks = result.completedTasks.filter(
+          (taskId) => !completedTasks.includes(taskId),
+        );
+        const popupMessage =
+          newlyFixedTasks.length === 0
+            ? "No bugs has been fixed."
+            : `Congrats, you have fixed ${newlyFixedTasks
+                .map((taskId) => `bug ${taskId}`)
+                .join(", ")}.`;
+
+        setCompletedTasks(result.completedTasks);
+        setValidationMessage(
+          result.remainingTasks === 0
+            ? "All tasks completed."
+            : `There are still ${result.remainingTasks} tasks to complete.`,
+        );
+        setRunCodePopup({
+          open: true,
+          title: newlyFixedTasks.length === 0 ? "No Bugs Fixed" : "Bug Fixed",
+          message: popupMessage,
+        });
+        setIsRunningCode(false);
+      },
+    );
   };
 
   useEffect(() => {
@@ -686,9 +749,9 @@ export default function Page() {
   );
 
   return (
-    <div className="font-pixel flex flex-col h-screen bg-orange-100">
+    <div className="font-pixel flex flex-col h-screen overflow-hidden bg-orange-100">
       <style>{buildRemoteSelectionStyles(resolvedEditorPresence)}</style>
-      <div className="w-screen h-15 grid grid-cols-3 items-center px-3">
+      <div className="w-full h-15 grid grid-cols-3 items-center px-3">
         <div className="flex items-center gap-3">
           <div className="border-2 p-1 w-fit bg-orange-400">
             Round {round}/4
@@ -715,8 +778,8 @@ export default function Page() {
         </div>
       </div>
 
-      <div className="flex w-screen h-full">
-        <div className="border-t border-r w-100 p-2">
+      <div className="grid w-full min-h-0 flex-1 grid-cols-[minmax(260px,clamp(260px,32vw,420px))_minmax(0,1fr)]">
+        <div className="w-full border-t border-r overflow-y-auto p-2">
           <div className="text-xl font-bold mb-3">Players</div>
 
           {players.map((p) => (
@@ -748,24 +811,14 @@ export default function Page() {
               {currentTasks.map((task) => (
                 <div
                   key={task.bugId}
-                  className={`border p-2 mb-2 cursor-pointer transition-all ${
+                  className={`border p-2 mb-2 transition-all ${
                     completedTasks.includes(task.bugId)
                       ? "bg-green-200 border-green-500"
-                      : "bg-red-100 border-red-400 hover:bg-red-200"
+                      : "bg-red-100 border-red-400"
                   }`}
-                  onClick={() => toggleTask(task.bugId)}
                 >
-                  <div className="flex items-center justify-between">
-                    <div className="text-sm font-bold">
-                      Task {task.bugId} (line {task.line})
-                    </div>
-                    <div>
-                      {completedTasks.includes(task.bugId) ? (
-                        <IoCheckmark className="text-green-600" />
-                      ) : (
-                        <IoClose className="text-red-600" />
-                      )}
-                    </div>
+                  <div className="text-sm font-bold">
+                    Task {task.bugId} (line {task.line})
                   </div>
                   <div className="text-xs mt-1">{task.description}</div>
                 </div>
@@ -781,24 +834,14 @@ export default function Page() {
               {currentTasks.map((task) => (
                 <div
                   key={task.bugId}
-                  className={`border p-2 mb-2 cursor-pointer transition-all ${
+                  className={`border p-2 mb-2 transition-all ${
                     completedTasks.includes(task.bugId)
                       ? "bg-green-200 border-green-500"
-                      : "bg-yellow-100 border-yellow-400 hover:bg-yellow-200"
+                      : "bg-yellow-100 border-yellow-400"
                   }`}
-                  onClick={() => toggleTask(task.bugId)}
                 >
-                  <div className="flex items-center justify-between">
-                    <div className="text-sm font-bold">
-                      Bug {task.bugId} (line {task.line})
-                    </div>
-                    <div>
-                      {completedTasks.includes(task.bugId) ? (
-                        <IoCheckmark className="text-green-600" />
-                      ) : (
-                        <IoClose className="text-yellow-600" />
-                      )}
-                    </div>
+                  <div className="text-sm font-bold">
+                    Bug {task.bugId} (line {task.line})
                   </div>
                   <div className="text-xs mt-1">{task.description}</div>
                 </div>
@@ -812,39 +855,113 @@ export default function Page() {
           )}
         </div>
 
-        <div className="border-t w-full">
-          <div className="border-b h-[92%] bg-black text-white">
-            {ready && (
-              <Editor
-                height="100%"
-                defaultLanguage="javascript"
-                defaultValue="// Start coding..."
-                theme="vs-dark"
-                options={{
-                  minimap: { enabled: false },
-                  fontSize: 14,
-                  fontFamily: "monospace",
-                  cursorSmoothCaretAnimation: "on",
-                  smoothScrolling: true,
-                  padding: { top: 10 },
-                }}
-                onMount={(editor) => {
-                  editorRef.current = editor;
-                  bindingRef.current?.(editor);
-                }}
-              />
-            )}
+        <div className="min-w-0 border-t overflow-hidden">
+          <div className="flex h-[92%] min-h-0 flex-col border-b bg-black text-white">
+            <div className="flex items-center gap-2 border-b border-zinc-700 px-3 py-2 bg-zinc-900">
+              <button
+                className={`cursor-pointer border px-3 py-1 text-sm font-semibold ${
+                  activeEditorTab === "code"
+                    ? "bg-orange-400 text-black border-orange-300"
+                    : "bg-zinc-800 text-zinc-100 border-zinc-600"
+                }`}
+                onClick={() => setActiveEditorTab("code")}
+              >
+                challenge.js
+              </button>
+
+              {role !== "sabotager" && (
+                <button
+                  className={`cursor-pointer border px-3 py-1 text-sm font-semibold ${
+                    activeEditorTab === "guide"
+                      ? "bg-orange-400 text-black border-orange-300"
+                      : "bg-zinc-800 text-zinc-100 border-zinc-600"
+                  }`}
+                  onClick={() => setActiveEditorTab("guide")}
+                >
+                  fix-guide.txt
+                </button>
+              )}
+            </div>
+
+            <div className="min-h-0 flex-1">
+              {ready && activeEditorTab === "code" && (
+                <Editor
+                  height="100%"
+                  defaultLanguage="javascript"
+                  defaultValue="// Start coding..."
+                  theme="vs-dark"
+                  options={{
+                    minimap: { enabled: false },
+                    fontSize: 14,
+                    fontFamily: "monospace",
+                    cursorSmoothCaretAnimation: "on",
+                    smoothScrolling: true,
+                    padding: { top: 10 },
+                  }}
+                  onMount={(editor) => {
+                    editorRef.current = editor;
+                    bindingRef.current?.(editor);
+                  }}
+                />
+              )}
+
+              {ready && activeEditorTab === "guide" && role !== "sabotager" && (
+                <Editor
+                  height="100%"
+                  language="javascript"
+                  value={
+                    guideTemplates[category] ||
+                    "// No guide available for this category yet."
+                  }
+                  theme="vs-dark"
+                  options={{
+                    readOnly: true,
+                    minimap: { enabled: false },
+                    fontSize: 14,
+                    fontFamily: "monospace",
+                    cursorSmoothCaretAnimation: "off",
+                    smoothScrolling: true,
+                    padding: { top: 10 },
+                    lineNumbers: "on",
+                  }}
+                />
+              )}
+            </div>
           </div>
 
-          <div className="w-full flex items-center justify-center mt-2.5">
-            <span
-              className="border-black border p-2 bg-red-500 hover:bg-red-600 text-white cursor-pointer font-semibold"
-              onClick={() => {
-                socketRef.current?.emit("emergency-button", roomId);
-              }}
-            >
-              Emergency
-            </span>
+          <div className="w-full flex flex-col items-center justify-center gap-2 px-3 py-2">
+            <div className="flex items-center justify-center gap-3">
+              {role !== "sabotager" && (
+                <button
+                  className="border-black border p-2 bg-emerald-500 hover:bg-emerald-600 text-white cursor-pointer font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
+                  onClick={runCodeCheck}
+                  disabled={isRunningCode || !ready}
+                >
+                  {isRunningCode ? "Running..." : "Run Code"}
+                </button>
+              )}
+
+              <button
+                className="border-black border p-2 bg-red-500 hover:bg-red-600 text-white cursor-pointer font-semibold"
+                onClick={() => {
+                  socketRef.current?.emit("emergency-button", roomId);
+                }}
+              >
+                Emergency
+              </button>
+            </div>
+
+            {validationMessage && (
+              <div className="text-sm font-semibold text-center px-3">
+                {validationMessage}
+              </div>
+            )}
+
+            {role === "sabotager" && (
+              <div className="text-xs text-center px-3">
+                Civilians use Run Code to validate repaired bugs.
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -855,6 +972,34 @@ export default function Page() {
           animate={{ opacity: 1 }}
           transition={{ duration: 0.8 }}
         />
+      )}
+      {runCodePopup.open && (
+        <motion.div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+        >
+          <motion.div
+            className="w-full max-w-md border-4 border-black bg-orange-100 p-5 text-black shadow-[8px_8px_0_0_rgba(0,0,0,1)]"
+            initial={{ scale: 0.92, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ duration: 0.18 }}
+          >
+            <div className="text-2xl font-bold">{runCodePopup.title}</div>
+            <div className="mt-3 text-sm">{runCodePopup.message}</div>
+            <div className="mt-5 flex justify-end">
+              <button
+                className="cursor-pointer border-2 border-black bg-orange-400 px-4 py-2 font-semibold hover:bg-orange-500"
+                onClick={() =>
+                  setRunCodePopup({ open: false, title: "", message: "" })
+                }
+              >
+                Close
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
       )}
     </div>
   );

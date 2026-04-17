@@ -3,6 +3,7 @@ import next from "next";
 import { Server } from "socket.io";
 import * as Y from "yjs";
 import { codeTemplates } from "./data/challenges/index.ts";
+import { validateCodeProgress } from "./data/challenges/validation.ts";
 const PORT = process.env.PORT || 3000;
 
 const dev = process.env.NODE_ENV !== "production";
@@ -553,6 +554,66 @@ app.prepare().then(() => {
         if (gameState[roomId] && gameState[roomId].playerTasks) {
           gameState[roomId].playerTasks[playerId] = completedTasks;
         }
+      },
+    );
+
+    socket.on(
+      "validate-code",
+      (
+        data: {
+          roomId: string;
+          playerId: string;
+          code: string;
+        },
+        callback?: (result: {
+          completedTasks: number[];
+          newlyFixedTasks: number[];
+          remainingTasks: number;
+          totalTasks: number;
+          isComplete: boolean;
+          message: string;
+        }) => void,
+      ) => {
+        const { roomId, playerId, code } = data;
+        const category = gameState[roomId]?.category;
+
+        if (!category) {
+          callback?.({
+            completedTasks: [],
+            newlyFixedTasks: [],
+            remainingTasks: 0,
+            totalTasks: 0,
+            isComplete: false,
+            message: "No active challenge found.",
+          });
+          return;
+        }
+
+        const result = validateCodeProgress(category, code);
+
+        const previousCompletedTasks =
+          gameState[roomId]?.playerTasks?.[playerId] || [];
+        const newlyFixedTasks = result.completedTasks.filter(
+          (taskId) => !previousCompletedTasks.includes(taskId),
+        );
+
+        if (gameState[roomId]?.playerTasks) {
+          gameState[roomId].playerTasks[playerId] = result.completedTasks;
+        }
+
+        callback?.({
+          completedTasks: result.completedTasks,
+          newlyFixedTasks,
+          remainingTasks: result.remainingTasks,
+          totalTasks: result.totalTasks,
+          isComplete: result.isComplete,
+          message:
+            newlyFixedTasks.length === 0
+              ? "No bugs has been fixed."
+              : `Congrats, you have fixed ${newlyFixedTasks
+                  .map((taskId) => `bug ${taskId}`)
+                  .join(", ")}.`,
+        });
       },
     );
 
